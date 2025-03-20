@@ -1,0 +1,34 @@
+// Bootstrap imports must come first
+@use "bootstrap/scss/functions" as *;
+@use "bootstrap/scss/variables" as *;
+@use "bootstrap/scss/utilities" as *;
+
+// Define custom colors and font size *after* importing variables
+$primary: #BDCE22FF; // Lime-green
+$custom: rgb(78, 78, 74); // Dark gray
+$font-size-base: 1.4rem; // Base font size
+$font-family-base: "Poppins", sans-serif; // Beautiful font
+
+// Define theme colors for text and backgrounds
+$theme-colors: (
+  "primary": $primary,
+  "custom": $custom
+);
+
+// Extend utilities for text and background colors
+$utilities: map-merge(
+  $utilities,
+  (
+    "color": map-merge(
+      map-get($utilities, "color"),
+      ( "values": $theme-colors )
+    ),
+    "background-color": map-merge(
+      map-get($utilities, "background-color"),
+      ( "values": $theme-colors )
+    )
+  )
+);
+
+// Import Bootstrap last
+@use "bootstrap/scss/bootstrap" as *;
