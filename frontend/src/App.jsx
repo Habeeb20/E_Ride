@@ -11,6 +11,7 @@ import EmailVerify from "./pages/Auth/verifyEmail";
 import { Toaster } from "sonner";
 import ProfileForm from "./pages/Auth/ProfileForm";
 import FaceAuth from "./pages/Auth/FaceAuth";
+import DriverDashboard from "./pages/Driver/DriverDashboard";
 
 // Custom PrivateRoute to check token in localStorage
 const PrivateRoute = ({ children }) => {
@@ -62,6 +63,15 @@ const App = () => {
           element={
             <PrivateRoute>
               <Dashboard />
+            </PrivateRoute>
+          }
+        />
+
+<Route
+          path="/driver-dashboard"
+          element={
+            <PrivateRoute>
+              <DriverDashboard />
             </PrivateRoute>
           }
         />

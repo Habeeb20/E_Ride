@@ -4,7 +4,7 @@ import cloudinary from "cloudinary"
 import Profile from "../models/auth/profileSchema.js"
 import multer from "multer"
 import dotenv from "dotenv"
-
+import User from "../models/auth/authSchema.js"
 import {verifyToken} from "../middleware/verifyToken.js"
 
 dotenv.config()
@@ -31,17 +31,17 @@ profileRoute.post("/createprofile", async (req, res) => {
       phoneNumber,
       carDetails,
       question,
-      profilePictureUrl, // Now expecting a URL from frontend
+      profilePicture, // Now expecting a URL from frontend
       schoolIdUrl,       // Now expecting a URL from frontend (if applicable)
-      carPictureUrl,     // Now expecting a URL from frontend (if applicable)
-      driverLicenseUrl   // Now expecting a URL from frontend (if applicable)
+      carPicture,     // Now expecting a URL from frontend (if applicable)
+      driverLicense   // Now expecting a URL from frontend (if applicable)
     } = req.body;
   
     try {
       console.log("Request Body:", req.body);
   
       // Validate required fields
-      if (!userEmail || !role || !location || !phoneNumber || !profilePictureUrl) {
+      if (!userEmail || !role || !location || !phoneNumber || !profilePicture) {
         return res.status(400).json({
           status: false,
           message: "Missing required fields: userEmail, role, location, phoneNumber, or profilePictureUrl",
@@ -90,7 +90,7 @@ profileRoute.post("/createprofile", async (req, res) => {
         role,
         location: parsedLocation,
         phoneNumber,
-        profilePictureUrl, // Directly use the URL from frontend
+        profilePicture, // Directly use the URL from frontend
       };
   
       // Handle passenger role
@@ -116,20 +116,20 @@ profileRoute.post("/createprofile", async (req, res) => {
   
       // Handle driver role
       if (role === "driver") {
-        if (!carPictureUrl) {
+        if (!carPicture) {
           return res.status(400).json({
             status: false,
             message: "Car picture URL is required for drivers",
           });
         }
-        if (!driverLicenseUrl) {
+        if (!driverLicense) {
           return res.status(400).json({
             status: false,
             message: "Driver's license URL is required",
           });
         }
-        profileData.carPicture = carPictureUrl;     // Use the URL from frontend
-        profileData.driverLicenseUrl = driverLicenseUrl; // Use the URL from frontend
+        profileData.carPicture = carPicture;     // Use the URL from frontend
+        profileData.driverLicense = driverLicense; // Use the URL from frontend
   
         if (!carDetails) {
           return res.status(400).json({

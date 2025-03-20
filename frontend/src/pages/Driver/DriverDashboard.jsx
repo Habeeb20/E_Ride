@@ -27,7 +27,7 @@ import im2 from "../../assets/Rectangle 90 (2).png";
 import im3 from "../../assets/Rectangle 90.png";
 import axios from "axios";
 
-const Dashboard = () => {
+const DriverDashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -438,4 +438,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default DriverDashboard;

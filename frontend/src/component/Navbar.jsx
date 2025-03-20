@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import  { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Menu, X } from "react-feather";
 
@@ -20,7 +20,7 @@ const Navbar = () => {
   };
 
   return (
-    <div className="fixed top-0 left-0 w-full z-50 text-white" style={{ backgroundColor: "#BE24AA" }}>
+    <div className="fixed top-0 left-0 w-full z-50 text-white" style={{ backgroundColor: "rgb(78, 78, 74)", }}>
 
       {/* Mobile Toggle Header */}
       <div className="md:hidden flex items-center justify-between p-4 bg-customPink text-white">

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import  { useState } from "react";
 import { FaFacebookF, FaGoogle, FaTwitter, FaUserCheck } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner"; // For notifications
@@ -61,7 +61,7 @@ const Signup = () => {
       <div className="min-h-screen flex items-center justify-center bg-white px-4 mt-5">
       <div className="w-full max-w-md p-8 bg-white shadow-lg rounded-lg">
         <div className="flex flex-col items-center mb-6">
-          <FaUserCheck size={64} className="text-e-ride-purple mb-2" />
+          <FaUserCheck size={64} className="text-activeColor mb-2" />
           <h1 className="text-2xl font-bold text-gray-800">Register</h1>
         </div>
 
@@ -76,7 +76,7 @@ const Signup = () => {
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
               placeholder="Enter your first name"
-              className="w-full p-3 border border-e-ride-purple rounded-full focus:outline-none focus:ring-2 focus:ring-e-ride-purple"
+              className="w-full p-3 border border-activeColor rounded-full focus:outline-none focus:ring-2 focus:ring-custom"
               required
             />
           </div>
@@ -91,7 +91,7 @@ const Signup = () => {
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
               placeholder="Enter your last name"
-              className="w-full p-3 border border-e-ride-purple rounded-full focus:outline-none focus:ring-2 focus:ring-e-ride-purple"
+           className="w-full p-3 border border-activeColor rounded-full focus:outline-none focus:ring-2 focus:ring-custom"
               required
             />
           </div>
@@ -106,7 +106,7 @@ const Signup = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your email"
-              className="w-full p-3 border border-e-ride-purple rounded-full focus:outline-none focus:ring-2 focus:ring-e-ride-purple"
+              className="w-full p-3 border border-activeColor rounded-full focus:outline-none focus:ring-2 focus:ring-custom"
               required
             />
           </div>
@@ -121,7 +121,7 @@ const Signup = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
-              className="w-full p-3 border border-e-ride-purple rounded-full focus:outline-none focus:ring-2 focus:ring-e-ride-purple"
+              className="w-full p-3 border border-activeColor rounded-full focus:outline-none focus:ring-2 focus:ring-custom"
               required
             />
           </div>

@@ -135,7 +135,7 @@ const EmailVerify = () => {
     <div className="min-h-screen flex items-center justify-center bg-white px-4 py-8">
       <div className="w-full max-w-md p-8 bg-white shadow-2xl rounded-2xl border border-gray-100">
         <div className="flex flex-col items-center mb-6">
-          <FaCheckCircle size={64} className="text-e-ride-purple mb-2" />
+          <FaCheckCircle size={64} className="text-customPink mb-2" />
           <h1 className="text-2xl font-bold text-gray-800">Verify Your Email</h1>
           <p className="text-sm text-gray-600 mt-2">
             We’ve sent a 6-digit verification code to {email || "your email"}. Please enter it below.
@@ -153,7 +153,7 @@ const EmailVerify = () => {
                 onChange={(e) => handleChange(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
                 maxLength={1}
-                className="w-12 h-12 text-center text-xl font-semibold border border-e-ride-purple rounded-full focus:outline-none focus:ring-2 focus:ring-e-ride-purple focus:border-transparent"
+                className="w-12 h-12 text-center text-xl font-semibold border border-customPink rounded-full focus:outline-none focus:ring-2 focus:ring-customPink focus:border-transparent"
                 placeholder="0"
                 required
                 disabled={isSubmitting || loading}
@@ -170,7 +170,7 @@ const EmailVerify = () => {
           <button
             type="submit"
             disabled={isSubmitting || loading || otp.some((digit) => !digit)}
-            className="w-full py-3 bg-gradient-to-r from-purple-500 to-e-ride-purple text-white font-semibold rounded-full hover:from-purple-600 hover:to-e-ride-purple focus:outline-none focus:ring-2 focus:ring-e-ride-purple transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3 bg-gradient-to-r from-green-500 to-customPink text-white font-semibold rounded-full hover:from-purple-600 hover:to-customPink focus:outline-none focus:ring-2 focus:ring-e-ride-purple transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting || loading ? "Verifying..." : "VERIFY EMAIL"}
           </button>
@@ -180,7 +180,7 @@ const EmailVerify = () => {
           Didn’t receive the code?{" "}
           <button
             onClick={resendOtp}
-            className="text-e-ride-purple hover:underline font-medium"
+            className="text-customPink hover:underline font-medium"
             disabled={isSubmitting || loading || resendCooldown > 0}
           >
             {resendCooldown > 0 ? `Resend Code (${resendCooldown}s)` : "Resend Code"}

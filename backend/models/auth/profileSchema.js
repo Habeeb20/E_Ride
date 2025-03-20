@@ -37,7 +37,7 @@ const profileSchema = new mongoose.Schema(
         return this.role === "passenger" && this.question === "student";
       },
     },
-    driverLicenseUrl: {
+    driverLicense: {
       type: String, 
       required: function () {
         return this.role === "driver";

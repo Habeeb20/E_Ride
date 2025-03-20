@@ -72,7 +72,7 @@ const Login = () => {
        <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <div className="w-full max-w-md p-8 bg-white shadow-lg rounded-lg">
         <div className="flex flex-col items-center mb-6">
-          <FaUserCheck size={64} className="text-e-ride-purple mb-2" />
+          <FaUserCheck size={64} className="text-activeColor mb-2" />
           <h1 className="text-2xl font-bold text-gray-800">Login</h1>
         </div>
 

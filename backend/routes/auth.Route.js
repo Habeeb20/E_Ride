@@ -15,12 +15,20 @@ dotenv.config()
 const authRouter = express.Router()
 
 const transporter = nodemailer.createTransport({
-    service:"gmail",
-    auth:{
-        user: process.env.USER,
-        pass: process.env.PASS,
-    }
+  service:'gmail',
+    auth: {
+       user:"essentialng23@gmail.com",
+        pass:"clepxviuvbxqbedp"
+      },
+ 
 })
+
+// service:"gmail",
+// auth:{
+//     user: "essential23@gmail.com",
+//     pass: "xcdkvdqmdnxfdwga",
+   
+// }
 
 
 cloudinary.config({
@@ -99,7 +107,7 @@ cloudinary.config({
   };
   
 
-authRouter.post("/signup", async(req, res) => {
+authRouter.post("/register", async(req, res) => {
     const { firstName, lastName, email, password } = req.body;
 
     try {

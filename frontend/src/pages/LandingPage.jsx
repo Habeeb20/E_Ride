@@ -1,36 +1,54 @@
-import  { useState, useEffect, useRef,  } from "react";
+import { useState, useEffect, useRef } from "react";
 import { FaCar } from "react-icons/fa";
 import { Button } from "@mui/material";
 import im from "../assets/pic.jpg";
 
 const LandingPage = () => {
   const [carPositions, setCarPositions] = useState([
-    { lat: 37.7749, lng: -122.4194 }, // Initial positions (will be converted to pixels)
-    { lat: 37.7750, lng: -122.4184 },
-    { lat: 37.7748, lng: -122.4204 },
+    { x: 50, y: 50, targetX: window.innerWidth / 2, targetY: window.innerHeight / 2 }, // Top-left
+    { x: window.innerWidth - 50, y: 50, targetX: window.innerWidth / 2, targetY: window.innerHeight / 2 }, // Top-right
+    { x: 50, y: window.innerHeight - 50, targetX: window.innerWidth / 2, targetY: window.innerHeight / 2 }, // Bottom-left
+    { x: window.innerWidth - 50, y: window.innerHeight - 50, targetX: window.innerWidth / 2, targetY: window.innerHeight / 2 }, // Bottom-right
   ]);
   const animationRef = useRef();
 
-  // Simulate moving cars
+  // Simulate moving cars toward the center and reset
   useEffect(() => {
     console.log("Starting car movement animation...");
     animationRef.current = setInterval(() => {
       setCarPositions(prevPositions => {
         const newPositions = prevPositions.map(pos => {
-          // Simple random movement within reasonable bounds
-          let newLat = pos.lat + (Math.random() - 0.5) * 0.001;
-          let newLng = pos.lng + (Math.random() - 0.5) * 0.001;
-          
-          // Keep within reasonable bounds (adjusted for pixel conversion later)
-          newLat = Math.max(37.77, Math.min(37.78, newLat));
-          newLng = Math.max(-122.42, Math.min(-122.41, newLng));
-          
-          return { lat: newLat, lng: newLng };
+          // Move towards the center
+          const dx = pos.targetX - pos.x;
+          const dy = pos.targetY - pos.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const speed = 5; // Adjust speed of movement
+
+          if (distance < speed) {
+            // Reset to initial position if close to center
+            return {
+              ...pos,
+              x: pos === prevPositions[0] ? 50 : 
+                pos === prevPositions[1] ? window.innerWidth - 50 : 
+                pos === prevPositions[2] ? 50 : 
+                window.innerWidth - 50,
+              y: pos === prevPositions[0] ? 50 : 
+                pos === prevPositions[1] ? 50 : 
+                pos === prevPositions[2] ? window.innerHeight - 50 : 
+                window.innerHeight - 50,
+            };
+          }
+
+          // Move toward center
+          const newX = pos.x + (dx / distance) * speed;
+          const newY = pos.y + (dy / distance) * speed;
+
+          return { ...pos, x: newX, y: newY };
         });
         console.log("Updated car positions:", newPositions);
         return newPositions;
       });
-    }, 2000);
+    }, 100); // Update every 100ms for smoother animation
 
     return () => {
       console.log("Cleaning up car movement animation...");
@@ -40,38 +58,27 @@ const LandingPage = () => {
     };
   }, []);
 
-  // Convert lat/lng to approximate pixel positions (simplified)
-  const getPixelPosition = (position) => {
-    const scale = 10000; // Adjust this scale factor based on your image size
-    const x = (position.lng + 122.42) * scale; // Normalize lng relative to min bound
-    const y = (37.78 - position.lat) * scale; // Normalize lat and invert for top-down
-    return { x: Math.min(Math.max(x, 0), window.innerWidth * 0.8), y: Math.min(Math.max(y, 0), window.innerHeight * 0.8) };
-  };
-
   return (
     <div 
       className="relative w-full h-screen overflow-hidden bg-cover bg-center"
       style={{ 
-        backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${im})` // Darken with overlay
+        backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${im})`
       }}
     >
       {/* Moving Car Icons */}
-      {carPositions.map((position, index) => {
-        const { x, y } = getPixelPosition(position);
-        return (
-          <div
-            key={index}
-            className="absolute transition-all duration-2000 ease-in-out"
-            style={{
-              left: `${x}px`,
-              top: `${y}px`,
-              transform: 'translate(-50%, -50%)', // Center the icon
-            }}
-          >
-            <FaCar size={40} className="text-yellow-500 animate-bounce" />
-          </div>
-        );
-      })}
+      {carPositions.map((position, index) => (
+        <div
+          key={index}
+          className="absolute transition-all duration-100 ease-linear"
+          style={{
+            left: `${position.x}px`,
+            top: `${position.y}px`,
+            transform: 'translate(-50%, -50%)', // Center the icon
+          }}
+        >
+          <FaCar size={40} className="text-yellow-500 animate-bounce" />
+        </div>
+      ))}
 
       <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-gradient-to-t from-black/60 to-transparent">
         <div className="absolute top-4 left-4 bg-e-ride-green/20 p-4 rounded-full">
@@ -93,7 +100,7 @@ const LandingPage = () => {
               className="rounded-full px-8 py-3 text-lg font-medium shadow-lg"
               style={{ 
                 backgroundColor: "#BDCE22FF",
-                color: "white" // White text for Sign Up
+                color: "white"
               }}
               href="/onboarding1"
             >
@@ -102,10 +109,10 @@ const LandingPage = () => {
             <Button
               variant="outlined"
               size="large"
-              className="rounded-full px-8 py-3 text-lg font-medium shadow-lg"
+              className="rounded-full Iqpx-8 py-3 text-lg font-medium shadow-lg"
               style={{ 
                 borderColor: "#BDCE22FF",
-                color: "white", // White text for Login
+                color: "white",
                 backgroundColor: "transparent"
               }}
               sx={{

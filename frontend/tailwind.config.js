@@ -6,9 +6,10 @@ export const content = [
 export const theme = {
   extend: {
     colors: {
-      'e-ride-purple': '#9333EA',
+      'e-ride-purple': "rgb(78, 78, 74)",
 
       customPink: " #BDCE22FF",
+      customGreen: " #545C0CFF",
       activeColor: "rgb(78, 78, 74)"
     },
   },
