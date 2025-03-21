@@ -27,7 +27,7 @@ import im1 from "../../assets/Rectangle 90 (1).png";
 import im2 from "../../assets/Rectangle 90 (2).png";
 import im3 from "../../assets/Rectangle 90.png";
 import axios from "axios";
-
+import { statesAndLgas } from "../../stateAndLga";
 const Dashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -43,15 +43,31 @@ const Dashboard = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState({});
   const [showNotification, setShowNotification] = useState(false); 
-  const [carData, setCarData] = useState(null); // State for car details
+  const [allSchedules, setAllSchedules] = useState([]);
+  const [carData, setCarData] = useState(null); 
+ 
   const [carForm, setCarForm] = useState({
     carDetails: { model: "", product: "", year: "", color: "", plateNumber: "" },
     picture: "",
     carPicture: "",
     driverLicense: "",
   });
+  const [scheduleForm, setScheduleForm] = useState({
+    time: "",
+    date: "",
+    state: "",
+    lga: "",
+    address: "",
+    priceRange: { min: "", max: "" },
+    description: "",
+  });
+  const [schedules, setSchedules] = useState([])
   const animationRef = useRef();
   const navigate = useNavigate();
+  const [negotiationPrice, setNegotiationPrice] = useState({});
+  const [showNegotiationModal, setShowNegotiationModal] = useState(false);
+  const [selectedScheduleId, setSelectedScheduleId] = useState(null);
+  const [negotiatedPriceInput, setNegotiatedPriceInput] = useState("");
 
   const handleCloseNotification = () => {
     setShowNotification(false)
@@ -274,6 +290,166 @@ const Dashboard = () => {
   }, [activeTab]);
 
 
+
+  const fetchMySchedules = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/getmyschedules`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data.status) {
+        setSchedules(response.data.schedules);
+        console.log(response.data.schedules)
+      } else {
+        setSchedules([]);
+      }
+    } catch (error) {
+      console.error("Error fetching schedules:", error);
+      setSchedules([]);
+      toast.error("Failed to fetch schedules", { style: { background: "#F44336", color: "white" } });
+    }
+  };
+
+
+  // New: Handle schedule submission
+  const handleScheduleSubmit = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem("token");
+    try {
+      setLoading(true);
+      const response = await axios.post(
+        `${import.meta.env.VITE_BACKEND_URL}/api/schedule/postschedule`,
+        scheduleForm,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data.status) {
+        toast.success("Schedule posted successfully", { style: { background: "#4CAF50", color: "white" } });
+        fetchMySchedules(); 
+        setScheduleForm({
+          time: "",
+          date: "",
+          state: "",
+          lga: "",
+          address: "",
+          priceRange: { min: "", max: "" },
+          description: "",
+        });
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || "Failed to post schedule";
+      toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // New: Fetch all schedules
+  const fetchAllSchedules = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/allschedules`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data.status) {
+        setAllSchedules(response.data.schedules);
+        console.log(response.data.schedules, "all schedules")
+      } else {
+        setAllSchedules([]);
+      }
+    } catch (error) {
+      console.error("Error fetching all schedules:", error);
+      setAllSchedules([]);
+      toast.error("Failed to fetch all schedules", { style: { background: "#F44336", color: "white" } });
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "ownACar") {
+      fetchCarProfile();
+    } else if (activeTab === "schedule") {
+      fetchMySchedules();
+    } else if (activeTab === "allSchedules") {
+      const isDriver = data?.data?.role === "driver";
+      const isPassengerWithCar = data?.data?.role === "passenger" && carData;
+      if (isDriver || isPassengerWithCar) {
+        fetchAllSchedules();
+      }
+    }
+  }, [activeTab, data, carData]);
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Add this function for handling responses
+const handleScheduleResponse = async (scheduleId, action, negotiatedPrice = null) => {
+  const token = localStorage.getItem("token");
+  try {
+    if (action === "negotiated" && negotiatedPrice) {
+      setSelectedScheduleId(scheduleId);
+      setNegotiatedPriceInput(negotiatedPrice);
+      setShowNegotiationModal(true); // Show modal for confirmation
+      return;
+    }
+
+    const payload = { status: action };
+    if (action === "negotiated") payload.negotiatedPrice = negotiatedPrice;
+
+    const response = await axios.post(
+      `${import.meta.env.VITE_BACKEND_URL}/api/schedule/respondtoschedule/${scheduleId}`,
+      payload,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (response.data.status) {
+      toast.success(`Schedule ${action} successfully`, { style: { background: "#4CAF50", color: "white" } });
+      fetchAllSchedules(); // Refresh schedules
+    }
+  } catch (error) {
+    const errorMessage = error.response?.data?.message || `Failed to ${action} schedule`;
+    toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
+  }
+};
+
+// Add this function to confirm negotiation
+const confirmNegotiation = async () => {
+  const token = localStorage.getItem("token");
+  try {
+    const payload = { status: "negotiated", negotiatedPrice: negotiatedPriceInput };
+    const response = await axios.post(
+      `${import.meta.env.VITE_BACKEND_URL}/api/schedule/respondtoschedule/${selectedScheduleId}`,
+      payload,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (response.data.status) {
+      toast.success("Negotiation submitted successfully", { style: { background: "#4CAF50", color: "white" } });
+      fetchAllSchedules();
+      setShowNegotiationModal(false);
+      setNegotiatedPriceInput("");
+      setSelectedScheduleId(null);
+    }
+  } catch (error) {
+    const errorMessage = error.response?.data?.message || "Failed to submit negotiation";
+    toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
+  }
+};
+  
+
+
  
 
   const profile = data?.data;
@@ -303,11 +479,8 @@ const Dashboard = () => {
     { icon: FaSuitcase, label: "airport drop off", color: "bg-gray-100" },
   ];
 
-  const rideOptions = [
-    { image: im1, label: "Car rides", description: "Daily commuting made easy." },
-    { image: im2, label: "Home drop off", description: "Safe and convenient arrival." },
-    { image: im3, label: "Office drop off", description: "Stress-free workday start." },
-  ];
+ const isDriver = profile?.role === "driver";
+  const isPassengerWithCar = profile?.role === "passenger" && carData;
 
   return (
     <div
@@ -583,155 +756,378 @@ const Dashboard = () => {
 
 
 
-        {activeTab === "ownACar" && (
-              <div className="bg-white bg-opacity-95 p-6 rounded-xl shadow-xl max-w-md mx-auto transform transition-all duration-300 hover:shadow-2xl">
-                <h3 className="text-2xl font-bold text-gray-800 mb-6">Own a Car?</h3>
-                {carData ? (
-                  <div className="space-y-3 text-gray-700">
-                    <p className="flex items-center">
-                      <FaCar className="mr-2 text-customGreen" /> <strong>Model:</strong>{" "}
-                      <span className="ml-2">{carData.carDetails.model}</span>
-                    </p>
-                    <p className="flex items-center">
-                      <FaCar className="mr-2 text-customGreen" /> <strong>Product:</strong>{" "}
-                      <span className="ml-2">{carData.carDetails.product}</span>
-                    </p>
-                    <p className="flex items-center">
-                      <FaCar className="mr-2 text-customGreen" /> <strong>Year:</strong>{" "}
-                      <span className="ml-2">{carData.carDetails.year}</span>
-                    </p>
-                    <p className="flex items-center">
-                      <FaCar className="mr-2 text-customGreen" /> <strong>Color:</strong>{" "}
-                      <span className="ml-2">{carData.carDetails.color}</span>
-                    </p>
-                    <p className="flex items-center">
-                      <FaCar className="mr-2 text-customGreen" /> <strong>Plate Number:</strong>{" "}
-                      <span className="ml-2">{carData.carDetails.plateNumber}</span>
-                    </p>
-                    <p className="flex items-center">
-                      <FaUser className="mr-2 text-customGreen" /> <strong>Picture:</strong>{" "}
-                      <a href={carData.picture} target="_blank" className="ml-2 text-blue-500 hover:underline">
-                        View
-                      </a>
-                    </p>
-                    <p className="flex items-center">
-                      <FaCar className="mr-2 text-customGreen" /> <strong>Car Picture:</strong>{" "}
-                      <a href={carData.carPicture} target="_blank" className="ml-2 text-blue-500 hover:underline">
-                        View
-                      </a>
-                    </p>
-                    <p className="flex items-center">
-                      <FaShieldAlt className="mr-2 text-customGreen" /> <strong>Driver License:</strong>{" "}
-                      <a href={carData.driverLicense} target="_blank" className="ml-2 text-blue-500 hover:underline">
-                        View
-                      </a>
-                    </p>
-                  </div>
-                ) : (
-                  <form onSubmit={handleCarSubmit} className="space-y-4">
+{activeTab === "ownACar" && (
+  <div className="w-full max-w-4xl mx-auto space-y-8">
+    {/* Car Details Section */}
+    <div className="bg-white bg-opacity-95 p-6 rounded-xl shadow-xl transform transition-all duration-300 hover:shadow-2xl">
+      <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+        <FaCar className="mr-2 text-customGreen" /> Own a Car?
+      </h3>
+      {carData ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4 text-gray-700">
+            <p className="flex items-center">
+              <FaCar className="mr-2 text-customGreen" /> <strong className="font-semibold">Model:</strong>
+              <span className="ml-2">{carData.carDetails.model}</span>
+            </p>
+            <p className="flex items-center">
+              <FaCar className="mr-2 text-customGreen" /> <strong className="font-semibold">Product:</strong>
+              <span className="ml-2">{carData.carDetails.product}</span>
+            </p>
+            <p className="flex items-center">
+              <FaCar className="mr-2 text-customGreen" /> <strong className="font-semibold">Year:</strong>
+              <span className="ml-2">{carData.carDetails.year}</span>
+            </p>
+            <p className="flex items-center">
+              <FaCar className="mr-2 text-customGreen" /> <strong className="font-semibold">Color:</strong>
+              <span className="ml-2">{carData.carDetails.color}</span>
+            </p>
+            <p className="flex items-center">
+              <FaCar className="mr-2 text-customGreen" /> <strong className="font-semibold">Plate Number:</strong>
+              <span className="ml-2">{carData.carDetails.plateNumber}</span>
+            </p>
+          </div>
+          <div className="space-y-4 text-gray-700">
+            <p className="flex items-center">
+              <FaUser className="mr-2 text-customGreen" /> <strong className="font-semibold">Picture:</strong>
+              <a href={carData.picture} target="_blank" className="ml-2 text-blue-500 hover:underline hover:text-blue-700 transition-colors">
+                View
+              </a>
+            </p>
+            <p className="flex items-center">
+              <FaCar className="mr-2 text-customGreen" /> <strong className="font-semibold">Car Picture:</strong>
+              <a href={carData.carPicture} target="_blank" className="ml-2 text-blue-500 hover:underline hover:text-blue-700 transition-colors">
+                View
+              </a>
+            </p>
+            <p className="flex items-center">
+              <FaShieldAlt className="mr-2 text-customGreen" /> <strong className="font-semibold">Driver License:</strong>
+              <a href={carData.driverLicense} target="_blank" className="ml-2 text-blue-500 hover:underline hover:text-blue-700 transition-colors">
+                View
+              </a>
+            </p>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleCarSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Model</label>
+              <input
+                type="text"
+                value={carForm.carDetails.model}
+                onChange={(e) =>
+                  setCarForm({ ...carForm, carDetails: { ...carForm.carDetails, model: e.target.value } })
+                }
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-customGreen focus:border-transparent transition-all"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Product</label>
+              <input
+                type="text"
+                value={carForm.carDetails.product}
+                onChange={(e) =>
+                  setCarForm({ ...carForm, carDetails: { ...carForm.carDetails, product: e.target.value } })
+                }
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-customGreen focus:border-transparent transition-all"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Year</label>
+              <input
+                type="text"
+                value={carForm.carDetails.year}
+                onChange={(e) =>
+                  setCarForm({ ...carForm, carDetails: { ...carForm.carDetails, year: e.target.value } })
+                }
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-customGreen focus:border-transparent transition-all"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Color</label>
+              <input
+                type="text"
+                value={carForm.carDetails.color}
+                onChange={(e) =>
+                  setCarForm({ ...carForm, carDetails: { ...carForm.carDetails, color: e.target.value } })
+                }
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-customGreen focus:border-transparent transition-all"
+                required
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700">Plate Number</label>
+              <input
+                type="text"
+                value={carForm.carDetails.plateNumber}
+                onChange={(e) =>
+                  setCarForm({ ...carForm, carDetails: { ...carForm.carDetails, plateNumber: e.target.value } })
+                }
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-customGreen focus:border-transparent transition-all"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Profile Picture</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setCarForm({ ...carForm, picture: e.target.files[0] })}
+                className="w-full p-3 border border-gray-300 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-customGreen file:text-white hover:file:bg-green-700 transition-all"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Car Picture</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setCarForm({ ...carForm, carPicture: e.target.files[0] })}
+                className="w-full p-3 border border-gray-300 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-customGreen file:text-white hover:file:bg-green-700 transition-all"
+                required
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700">Driver License</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setCarForm({ ...carForm, driverLicense: e.target.files[0] })}
+                className="w-full p-3 border border-gray-300 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-customGreen file:text-white hover:file:bg-green-700 transition-all"
+                required
+              />
+            </div>
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full py-3 bg-customGreen text-white rounded-lg font-semibold hover:bg-green-700 transition-colors duration-300 ${
+              loading ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+          >
+            {loading ? "Uploading..." : "Register Car"}
+          </button>
+        </form>
+      )}
+    </div>
+
+    {/* All Schedules Section (Only if car is registered or user is a driver) */}
+    {(isDriver || isPassengerWithCar) && (
+  <div className="bg-white bg-opacity-95 p-6 rounded-xl shadow-xl transform transition-all duration-300 hover:shadow-2xl">
+    <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+      <FaCalendar className="mr-2 text-customGreen" /> All Available Schedules
+    </h3>
+    {allSchedules.length === 0 ? (
+      <p className="text-gray-600 text-center">No available schedules found.</p>
+    ) : (
+      <div className="space-y-6">
+        {allSchedules.map((schedule) => (
+          <div key={schedule._id} className="p-4 bg-gray-50 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p><strong className="font-semibold">Time:</strong> {schedule.formattedTime}</p>
+                <p><strong className="font-semibold">Location:</strong> {schedule.state}, {schedule.lga}, {schedule.address}</p>
+                <p><strong className="font-semibold">Price Range:</strong> ₦{schedule.priceRange.min} - ₦{schedule.priceRange.max}</p>
+                {schedule.description && <p><strong className="font-semibold">Description:</strong> {schedule.description}</p>}
+                <p><strong className="font-semibold">Status:</strong> <span className={`capitalize ${schedule.status === 'confirmed' ? 'text-green-600' : 'text-yellow-600'}`}>{schedule.status}</span></p>
+                <p><strong className="font-semibold">Driver Response:</strong> <span className={`capitalize ${schedule.driverResponse.status === 'accepted' ? 'text-green-600' : schedule.driverResponse.status === 'rejected' ? 'text-red-600' : 'text-gray-600'}`}>{schedule.driverResponse.status}</span></p>
+              </div>
+              <div className="space-y-2">
+                <p><strong className="font-semibold">Customer:</strong> {schedule.customerId?.firstName} {schedule.customerId?.lastName}</p>
+                <p><strong className="font-semibold">Email:</strong> {schedule.customerId?.email}</p>
+                <p><strong className="font-semibold">Phone:</strong> {schedule.customerId?.phoneNumber}</p>
+              </div>
+            </div>
+            {(isDriver || isPassengerWithCar) && schedule.driverResponse.status === "pending" && (
+              <div className="mt-4 flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
+                <button
+                  onClick={() => handleScheduleResponse(schedule._id, "accepted")}
+                  className="py-2 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+                >
+                  Accept
+                </button>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="number"
+                    placeholder="Negotiate Price (NGN)"
+                    value={negotiationPrice[schedule._id] || ""}
+                    onChange={(e) => setNegotiationPrice({ ...negotiationPrice, [schedule._id]: e.target.value })}
+                    className="w-32 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-customGreen focus:border-transparent"
+                  />
+                  <button
+                    onClick={() => handleScheduleResponse(schedule._id, "negotiated", negotiationPrice[schedule._id])}
+                    className="py-2 px-4 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors duration-200"
+                  >
+                    Negotiate
+                  </button>
+                </div>
+                <button
+                  onClick={() => handleScheduleResponse(schedule._id, "rejected")}
+                  className="py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
+                >
+                  Reject
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
+
+{/* Negotiation Confirmation Modal */}
+{showNegotiationModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white p-6 rounded-xl shadow-xl max-w-md w-full transform transition-all duration-300">
+      <h3 className="text-xl font-bold text-gray-800 mb-4">Confirm Negotiation</h3>
+      <p className="text-gray-600 mb-4">Are you sure you want to negotiate this price?</p>
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700">Negotiated Price (NGN)</label>
+        <input
+          type="number"
+          value={negotiatedPriceInput}
+          onChange={(e) => setNegotiatedPriceInput(e.target.value)}
+          className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-customGreen focus:border-transparent"
+          min="0"
+        />
+      </div>
+      <div className="flex justify-end space-x-4">
+        <button
+          onClick={() => setShowNegotiationModal(false)}
+          className="py-2 px-4 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition-colors duration-200"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={confirmNegotiation}
+          className="py-2 px-4 bg-customGreen text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+        >
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+  </div>
+)}
+
+
+        {activeTab === "schedule" && (
+              <div className="bg-white bg-opacity-95 p-6 rounded-xl shadow-xl max-w-2xl mx-auto transform transition-all duration-300 hover:shadow-2xl">
+                <h3 className="text-2xl font-bold text-gray-800 mb-6">Schedules</h3>
+
+                {/* Schedule Form */}
+                <form onSubmit={handleScheduleSubmit} className="space-y-4 mb-8">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Model</label>
+                    <label className="block text-sm font-medium text-gray-700">Time (e.g., 10:00 AM)</label>
                     <input
                       type="text"
-                      value={carForm.carDetails.model}
-                      onChange={(e) =>
-                        setCarForm({
-                          ...carForm,
-                          carDetails: { ...carForm.carDetails, model: e.target.value },
-                        })
-                      }
+                      value={scheduleForm.time}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, time: e.target.value })}
                       className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-e-ride-purple"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Product</label>
+                    <label className="block text-sm font-medium text-gray-700">Date</label>
                     <input
-                      type="text"
-                      value={carForm.carDetails.product}
-                      onChange={(e) =>
-                        setCarForm({
-                          ...carForm,
-                          carDetails: { ...carForm.carDetails, product: e.target.value },
-                        })
-                      }
+                      type="date"
+                      value={scheduleForm.date}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, date: e.target.value })}
                       className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-e-ride-purple"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Year</label>
+                    <label className="block text-sm font-medium text-gray-700">State</label>
+                    <select
+                      value={scheduleForm.state}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, state: e.target.value, lga: "" })} // Reset LGA when state changes
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-e-ride-purple"
+                      required
+                    >
+                      <option value="">Select a State</option>
+                      {Object.keys(statesAndLgas).map((state) => (
+                        <option key={state} value={state}>
+                          {state}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">LGA</label>
+                    <select
+                      value={scheduleForm.lga}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, lga: e.target.value })}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-e-ride-purple"
+                      required
+                      disabled={!scheduleForm.state} // Disable until a state is selected
+                    >
+                      <option value="">Select an LGA</option>
+                      {scheduleForm.state &&
+                        statesAndLgas[scheduleForm.state].map((lga) => (
+                          <option key={lga} value={lga}>
+                            {lga}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Address</label>
                     <input
                       type="text"
-                      value={carForm.carDetails.year}
-                      onChange={(e) =>
-                        setCarForm({
-                          ...carForm,
-                          carDetails: { ...carForm.carDetails, year: e.target.value },
-                        })
-                      }
+                      value={scheduleForm.address}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, address: e.target.value })}
                       className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-e-ride-purple"
                       required
                     />
                   </div>
+                  <div className="flex space-x-4">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700">Min Price (NGN)</label>
+                      <input
+                        type="number"
+                        value={scheduleForm.priceRange.min}
+                        onChange={(e) =>
+                          setScheduleForm({
+                            ...scheduleForm,
+                            priceRange: { ...scheduleForm.priceRange, min: e.target.value },
+                          })
+                        }
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-e-ride-purple"
+                        required
+                        min="0"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700">Max Price (NGN)</label>
+                      <input
+                        type="number"
+                        value={scheduleForm.priceRange.max}
+                        onChange={(e) =>
+                          setScheduleForm({
+                            ...scheduleForm,
+                            priceRange: { ...scheduleForm.priceRange, max: e.target.value },
+                          })
+                        }
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-e-ride-purple"
+                        required
+                        min={scheduleForm.priceRange.min || 0}
+                      />
+                    </div>
+                  </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Color</label>
-                    <input
-                      type="text"
-                      value={carForm.carDetails.color}
-                      onChange={(e) =>
-                        setCarForm({
-                          ...carForm,
-                          carDetails: { ...carForm.carDetails, color: e.target.value },
-                        })
-                      }
+                    <label className="block text-sm font-medium text-gray-700">Description (Optional)</label>
+                    <textarea
+                      value={scheduleForm.description}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, description: e.target.value })}
                       className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-e-ride-purple"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Plate Number</label>
-                    <input
-                      type="text"
-                      value={carForm.carDetails.plateNumber}
-                      onChange={(e) =>
-                        setCarForm({
-                          ...carForm,
-                          carDetails: { ...carForm.carDetails, plateNumber: e.target.value },
-                        })
-                      }
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-e-ride-purple"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">A different Profile Picture</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setCarForm({ ...carForm, picture: e.target.files[0] })}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Car Picture</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setCarForm({ ...carForm, carPicture: e.target.files[0] })}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Driver License</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setCarForm({ ...carForm, driverLicense: e.target.files[0] })}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
-                      required
+                      maxLength="200"
                     />
                   </div>
                   <button
@@ -741,21 +1137,43 @@ const Dashboard = () => {
                       loading ? "opacity-50 cursor-not-allowed" : ""
                     }`}
                   >
-                    {loading ? "Uploading..." : "Register Car"}
+                    {loading ? "Posting..." : "Post Schedule"}
                   </button>
                 </form>
-                )}
+
+                {/* Schedules List */}
+                <div>
+                  <h4 className="text-xl font-semibold text-gray-800 mb-4">Your Schedules</h4>
+                  {schedules.length === 0 ? (
+                    <p className="text-gray-600">No schedules found.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {schedules.map((schedule) => (
+                        <div key={schedule._id} className="p-4 bg-gray-50 rounded-lg shadow-sm">
+                          <p><strong>Time:</strong> {schedule.formattedTime}</p>
+                          <p><strong>Location:</strong> {schedule.state}, {schedule.lga}, {schedule.address}</p>
+                          <p><strong>Price Range:</strong> ₦{schedule.priceRange.min} - ₦{schedule.priceRange.max}</p>
+                          {schedule.description && <p><strong>Description:</strong> {schedule.description}</p>}
+                          <p><strong>Status:</strong> {schedule.status}</p>
+                          <p><strong>Driver Response:</strong> {schedule.driverResponse.status}</p>
+                          {schedule.driverResponse.status === "negotiated" && (
+                            <p><strong>Negotiated Price:</strong> ₦{schedule.driverResponse.negotiatedPrice}</p>
+                          )}
+                          {schedule.driverResponse.driverId && (
+                            <div className="mt-2">
+                              <p><strong>Driver:</strong> {schedule.driverResponse.driverId.firstName} {schedule.driverResponse.driverId.lastName}</p>
+                              <p><strong>Email:</strong> {schedule.driverResponse.driverId.email}</p>
+                              <p><strong>Phone:</strong> {schedule.driverResponse.driverId.phoneNumber}</p>
+                              <p><strong>Location:</strong> {schedule.driverResponse.driverProfileId.location.state}, {schedule.driverResponse.driverProfileId.location.lga}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-
-
-        {activeTab === "schedule" && (
-              <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-lg max-w-lg mx-auto">
-                <h3 className="text-xl font-semibold mb-4">Will you like to have a schedule so as to avoid a delay for your trip?</h3>
-                <p className="text-gray-600">No ride history available yet.</p>
-              </div>
-            )}
-
           </main>
         </div>
       </div>

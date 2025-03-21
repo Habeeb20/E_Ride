@@ -20,6 +20,7 @@ import {
   FaMapMarkerAlt,
   FaPhone,
   FaShieldAlt,
+  FaCalendar
 } from "react-icons/fa";
 import { toast } from "sonner";
 import im1 from "../../assets/Rectangle 90 (1).png";
@@ -41,6 +42,11 @@ const DriverDashboard = () => {
   const [activeTab, setActiveTab] = useState("profile");
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState({});
+   const [allSchedules, setAllSchedules] = useState([])
+  const [negotiationPrice, setNegotiationPrice] = useState({});
+  const [showNegotiationModal, setShowNegotiationModal] = useState(false);
+  const [selectedScheduleId, setSelectedScheduleId] = useState(null);
+  const [negotiatedPriceInput, setNegotiatedPriceInput] = useState("");
   const animationRef = useRef();
   const navigate = useNavigate();
 
@@ -161,6 +167,69 @@ const DriverDashboard = () => {
     }
   };
 
+
+
+    // New: Fetch all schedules
+    const fetchAllSchedules = async () => {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/allschedules`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.data.status) {
+          setAllSchedules(response.data.schedules);
+          console.log("all schedules", response.data.schedules)
+        } else {
+          setAllSchedules([]);
+        }
+      } catch (error) {
+        console.error("Error fetching all schedules:", error);
+        setAllSchedules([]);
+        toast.error("Failed to fetch all schedules", { style: { background: "#F44336", color: "white" } });
+      }
+    };
+
+
+    useEffect(() => {
+      if(activeTab === "schedules"){
+        const isDriver = data?.data?.role === "driver";
+        if (isDriver ) {
+          fetchAllSchedules();
+        }
+      }
+    })
+  
+
+    // Add this function for handling responses
+    const handleScheduleResponse = async (scheduleId, action, negotiatedPrice = null) => {
+      const token = localStorage.getItem("token");
+      try {
+        if (action === "negotiated" && negotiatedPrice) {
+          setSelectedScheduleId(scheduleId);
+          setNegotiatedPriceInput(negotiatedPrice);
+          setShowNegotiationModal(true); // Show modal for confirmation
+          return;
+        }
+    
+        const payload = { status: action };
+        if (action === "negotiated") payload.negotiatedPrice = negotiatedPrice;
+    
+        const response = await axios.post(
+          `${import.meta.env.VITE_BACKEND_URL}/api/schedule/respondtoschedule/${scheduleId}`,
+          payload,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (response.data.status) {
+          toast.success(`Schedule ${action} successfully`, { style: { background: "#4CAF50", color: "white" } });
+          fetchAllSchedules(); // Refresh schedules
+        }
+      } catch (error) {
+        const errorMessage = error.response?.data?.message || `Failed to ${action} schedule`;
+        toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
+      }
+    };
+    
+
   const profile = data?.data;
 
   const sidebarItems = [
@@ -172,6 +241,7 @@ const DriverDashboard = () => {
     { id: "rides", label: "Rides", icon: FaRoute },
     { id: "profile", label: "Profile", icon: FaUser },
     { id: "settings", label: "Settings", icon: FaCog },
+    { id: "schedules", label: "All schedule?", icon: FaCalendar},
   ];
 
   const suggestions = [
@@ -186,12 +256,7 @@ const DriverDashboard = () => {
     { icon: FaSuitcase, label: "airport drop off", color: "bg-gray-100" },
   ];
 
-  const rideOptions = [
-    { image: im1, label: "Car rides", description: "Daily commuting made easy." },
-    { image: im2, label: "Home drop off", description: "Safe and convenient arrival." },
-    { image: im3, label: "Office drop off", description: "Stress-free workday start." },
-  ];
-
+  const isDriver = profile?.role === "driver";
   return (
     <div
       className="relative w-full h-screen flex overflow-hidden bg-cover bg-center"
@@ -431,6 +496,65 @@ const DriverDashboard = () => {
                 <p className="text-gray-600">Settings options will be added here.</p>
               </div>
             )}
+
+
+            
+                    {activeTab === "schedules" && (
+                          <div className="bg-white bg-opacity-95 p-6 rounded-xl shadow-xl max-w-2xl mx-auto transform transition-all duration-300 hover:shadow-2xl">
+                            <h3 className="text-2xl font-bold text-gray-800 mb-6">Schedules</h3>
+            
+                          
+                            {/* Schedules List */}
+                            <div>
+                              <h4 className="text-xl font-semibold text-gray-800 mb-4">All Schedules</h4>
+                              {allSchedules.length === 0 ? (
+                                <p className="text-gray-600">No schedules found.</p>
+                              ) : (
+                                <div className="space-y-4">
+                                  {allSchedules.map((schedule) => (
+                                    <div key={schedule._id} className="p-4 bg-gray-50 rounded-lg shadow-sm">
+                                     <div className="flex items-center space-x-4">
+  <img
+    className="w-16 h-16 rounded-full border-4 border-customGreen shadow-lg object-cover transition-all duration-300 hover:scale-105 hover:shadow-xl hover:border-customGreen-dark"
+    src={schedule.profileId?.profilePicture || "https://via.placeholder.com/150"}
+    alt={`${schedule.profileId?.firstName} ${schedule.customerId?.lastName}`}
+  />
+  <button
+    onClick={() => window.open(schedule.profileId?.profilePicture || "https://via.placeholder.com/150", "_blank")}
+    className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors duration-200"
+  >
+    View
+  </button>
+</div>
+                                       <p><strong>Name:</strong> {schedule.userId.firstName} {schedule.userId.lastName}</p>
+                                       <p><strong>Email:</strong> {schedule.userId.email}</p>
+                                       <p><strong>phone number:</strong> {schedule.profileId.phoneNumber}</p>
+                                       <p><strong>Location:</strong> {schedule.profileId.location?.lga}, {schedule.profileId.location?.state},</p>
+                                      <p><strong>Time:</strong> {schedule.formattedTime}</p>
+                                      <p><strong>Location:</strong> {schedule.state}, {schedule.lga}, {schedule.address}</p>
+                                      <p><strong>Price Range:</strong> ₦{schedule.priceRange.min} - ₦{schedule.priceRange.max}</p>
+                                      {schedule.description && <p><strong>Description:</strong> {schedule.description}</p>}
+                                      <p><strong>Status:</strong> {schedule.status}</p>
+                                      <p><strong>Driver Response:</strong> {schedule.driverResponse.status}</p>
+                                      {schedule.driverResponse.status === "negotiated" && (
+                                        <p><strong>Negotiated Price:</strong> ₦{schedule.driverResponse.negotiatedPrice}</p>
+                                      )}
+                                      {schedule.driverResponse.driverId && (
+                                        <div className="mt-2">
+                                          <p><strong>Driver:</strong> {schedule.driverResponse.driverId.firstName} {schedule.driverResponse.driverId.lastName}</p>
+                                          <p><strong>Email:</strong> {schedule.driverResponse.driverId.email}</p>
+                                          <p><strong>Phone:</strong> {schedule.driverResponse.driverId.phoneNumber}</p>
+                                          <p><strong>Location:</strong> {schedule.driverResponse.driverProfileId.location.state}, {schedule.driverResponse.driverProfileId.location.lga}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
           </main>
         </div>
       </div>

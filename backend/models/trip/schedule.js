@@ -14,10 +14,14 @@ const scheduleSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    ownAcarId:{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "OwnAcar"
+    },
     time: {
       type: String,
       required: [true, "Time is required"],
-      match: [/^(1[0-2]|0?[1-9]):([0-5][0-9]) (AM|PM)$/, "Time must be in HH:MM AM/PM format"],
+    //   match: [/^(1[0-2]|0?[1-9]):([0-5][0-9]) (AM|PM)$/, "Time must be in HH:MM AM/PM format"],
     },
     date: {
       type: Date,

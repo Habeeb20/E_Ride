@@ -91,6 +91,48 @@ ScheduleRoute.post("/respondtoschedule/:scheduleId", verifyToken, async (req, re
   const { response, negotiatedPrice } = req.body; 
 
   try {
+
+
+    
+    const schedule = await Schedule.findOne({ _id: scheduleId, isDeleted: false });
+    if (!schedule) {
+      return res.status(404).json({
+        status: false,
+        message: "Schedule not found",
+      });
+    }
+
+
+    
+    if (schedule.response !== "pending" || schedule.driverResponse.response !== "pending") {
+        return res.status(400).json({ status: false, message: "Schedule is no longer available for response" });
+      }
+
+    
+    const driver = await User.findById(driverId);
+    const isDriver = driver.role === "driver";
+    const isPassengerWithCar = driver.role === "passenger" && (await OwnAcar.findOne({userId: driverId}))
+    if (!driver) {
+      return res.status(404).json({
+        status: false,
+        message: "Driver not found",
+      });
+    }
+
+    if (!isDriver && !isPassengerWithCar) {
+        return res.status(403).json({
+          status: false,
+          message: "Only drivers or passengers with registered cars can respond to schedules",
+        });
+      }
+
+    const driverProfile = await Profile.findOne({ userId: driver._id });
+    if (!driverProfile) {
+      return res.status(404).json({
+        status: false,
+        message: "Driver profile not found",
+      });
+    }
     // Validate input
     if (!response || !["accepted", "negotiated", "rejected"].includes(response)) {
       return res.status(400).json({
@@ -105,29 +147,7 @@ ScheduleRoute.post("/respondtoschedule/:scheduleId", verifyToken, async (req, re
       });
     }
 
-    const driver = await User.findById(driverId);
-    if (!driver) {
-      return res.status(404).json({
-        status: false,
-        message: "Driver not found",
-      });
-    }
 
-    const driverProfile = await Profile.findOne({ userId: driver._id });
-    if (!driverProfile) {
-      return res.status(404).json({
-        status: false,
-        message: "Driver profile not found",
-      });
-    }
-
-    const schedule = await Schedule.findOne({ _id: scheduleId, isDeleted: false });
-    if (!schedule) {
-      return res.status(404).json({
-        status: false,
-        message: "Schedule not found",
-      });
-    }
 
     // Update driver response
     schedule.driverResponse = {
@@ -144,6 +164,11 @@ ScheduleRoute.post("/respondtoschedule/:scheduleId", verifyToken, async (req, re
 
     schedule.updatedBy = driver._id;
     await schedule.save();
+
+    const populatedSchedule = await Schedule.findById(scheduleId)
+    .populate("userId", "firstName lastName email phoneNumber")
+    .populate("profileId", "profilePicture carDetails.color carDetails.model carDetails.product carDetails.plateNumber, carPicture, location.state")
+    .populate("ownAcarId", "carDetails.model carDetails.color carDetails.product carDetails.plateNumber carPicture")
 
     return res.status(200).json({
       status: true,
@@ -213,8 +238,9 @@ ScheduleRoute.get("/allschedules", verifyToken, async (req, res) => {
   try {
     const schedules = await Schedule.find({
       isDeleted: false,
-      "driverResponse.status": "pending", // Only show schedules awaiting driver response
-    });
+      "driverResponse.status": "pending", 
+    }).populate("userId", "firstName lastName email ")
+      .populate("profileId", "profilePicture location.state phoneNumber")
 
     return res.status(200).json({
       status: true,
@@ -438,3 +464,23 @@ ScheduleRoute.put("/updateschedule/:id", verifyToken, async (req, res) => {
 
   
 export default ScheduleRoute;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
