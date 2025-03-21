@@ -9,6 +9,7 @@ import morgan from "morgan";
 import multer from "multer";
 import authRouter from "./routes/auth.Route.js";
 import profileRoute from "./routes/profile.Route.js";
+import ownACarRoute from "./routes/ownAcar.Route.js";
 
 
 dotenv.config()
@@ -39,6 +40,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/auth", authRouter)
 app.use("/api/profile", profileRoute)
+app.use("/api/ownacar", ownACarRoute)
   
 
 const port= process.env.PORT || 2000

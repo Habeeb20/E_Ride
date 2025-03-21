@@ -122,7 +122,7 @@ const LandingPage = () => {
                   borderColor: "#BDCE22FF"
                 }
               }}
-              href="/login"
+              href="/plogin"
             >
               Login
             </Button>
