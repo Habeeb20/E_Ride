@@ -10,6 +10,7 @@ import multer from "multer";
 import authRouter from "./routes/auth.Route.js";
 import profileRoute from "./routes/profile.Route.js";
 import ownACarRoute from "./routes/ownAcar.Route.js";
+import ScheduleRoute from "./routes/schedule.Route.js";
 
 
 dotenv.config()
@@ -41,7 +42,7 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRouter)
 app.use("/api/profile", profileRoute)
 app.use("/api/ownacar", ownACarRoute)
-  
+app.use("/api/schedule", ScheduleRoute)
 
 const port= process.env.PORT || 2000
 
