@@ -15,7 +15,9 @@ const scheduleSchema = new mongoose.Schema(
       index: true,
     },
 
-    customerId: { type: mongoose.Schema.Types.ObjectId, ref: "Auth", required: true },
+  
+
+    customerId: { type: mongoose.Schema.Types.ObjectId, ref: "Auth" },
   status: { type: String, enum: ["pending", "confirmed", "completed", "cancelled"], default: "pending" },
     ownAcarId:{
         type: mongoose.Schema.Types.ObjectId,
@@ -43,6 +45,11 @@ const scheduleSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    pickUp:{
+      type: String,
+      required: [true, "your pickup address is required"],
+    },
+
     address: {
       type: String,
       required: [true, "Address is required"],
@@ -92,6 +99,8 @@ const scheduleSchema = new mongoose.Schema(
         ref: "Profile",
         default: null,
       },
+
+      chatId: { type: mongoose.Schema.Types.ObjectId, ref: "Chat" }, 
     },
     status: {
       type: String,
@@ -162,3 +171,4 @@ scheduleSchema.set("toJSON", { virtuals: true });
 scheduleSchema.set("toObject", { virtuals: true });
 
 export default mongoose.model("Schedule", scheduleSchema);
+

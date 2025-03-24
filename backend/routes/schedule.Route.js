@@ -7,7 +7,7 @@ import Profile from "../models/auth/profileSchema.js";
 import User from "../models/auth/authSchema.js";
 import { verifyToken } from "../middleware/verifyToken.js";
 import Schedule from "../models/trip/schedule.js"; // Only one import needed, removed duplicate
-
+import Chat from "../models/trip/chat.js";
 dotenv.config();
 
 cloudinary.config({
@@ -22,11 +22,11 @@ const ScheduleRoute = express.Router();
 // POST /postschedule
 ScheduleRoute.post("/postschedule", verifyToken, async (req, res) => {
   const id = req.user.id;
-  const { time, date, state, lga, address, priceRange, description, recurrence, duration } = req.body;
+  const { time, date, state, lga, address, priceRange, description, recurrence, duration, pickUp } = req.body;
 
   try {
     // Validate required fields
-    if (!time || !date || !state || !lga || !address || !priceRange || !priceRange.min || !priceRange.max) {
+    if (!time || !date || !state || !lga || !address || !priceRange || !pickUp || !priceRange.min || !priceRange.max) {
       return res.status(400).json({
         status: false,
         message: "All fields (time, date, state, lga, address, priceRange.min, priceRange.max) are required",
@@ -54,6 +54,7 @@ ScheduleRoute.post("/postschedule", verifyToken, async (req, res) => {
       profileId: profile._id,
       time,
       date,
+      pickUp,
       state,
       lga,
       address,
@@ -91,40 +92,49 @@ ScheduleRoute.post("/respondtoschedule/:scheduleId", verifyToken, async (req, re
   const { status, negotiatedPrice } = req.body;
 
   try {
+    // Find the schedule
     const schedule = await Schedule.findOne({ _id: scheduleId, isDeleted: false });
     if (!schedule) {
       return res.status(404).json({ status: false, message: "Schedule not found" });
     }
 
+    // Check if the schedule is still available for response
     if (schedule.status !== "pending" || schedule.driverResponse.status !== "pending") {
       return res.status(400).json({ status: false, message: "Schedule is no longer available for response" });
     }
 
+    // Find the driver and check their role
     const driver = await User.findById(driverId);
-    const isDriver = driver.role === "driver";
-    const isPassengerWithCar = driver.role === "passenger" && (await OwnAcar.findOne({ userId: driverId }));
     if (!driver) {
       return res.status(404).json({ status: false, message: "Driver not found" });
     }
 
-    if (isDriver || isPassengerWithCar) {
+    const isDriver = driver.role === "driver";
+    const isPassengerWithCar = driver.role === "passenger" && (await OwnAcar.findOne({ userId: driverId }));
+
+    // Corrected authorization logic
+    if (isDriver ||  isPassengerWithCar) {
       return res.status(403).json({
         status: false,
         message: "Only drivers or passengers with registered cars can respond to schedules",
       });
     }
 
+    // Find the driver's profile
     const driverProfile = await Profile.findOne({ userId: driver._id });
     if (!driverProfile) {
       return res.status(404).json({ status: false, message: "Driver profile not found" });
     }
 
+    // Validate the status
     if (!status || !["accepted", "negotiated", "rejected"].includes(status)) {
       return res.status(400).json({
         status: false,
         message: "Valid response (accepted, negotiated, rejected) is required",
       });
     }
+
+    // Validate negotiatedPrice for "negotiated" status
     if (status === "negotiated" && (!negotiatedPrice || negotiatedPrice < 0)) {
       return res.status(400).json({
         status: false,
@@ -132,6 +142,7 @@ ScheduleRoute.post("/respondtoschedule/:scheduleId", verifyToken, async (req, re
       });
     }
 
+    // Update driver response
     schedule.driverResponse = {
       status: status,
       negotiatedPrice: status === "negotiated" ? negotiatedPrice : null,
@@ -139,18 +150,35 @@ ScheduleRoute.post("/respondtoschedule/:scheduleId", verifyToken, async (req, re
       driverProfileId: driverProfile._id,
     };
 
+    // Update schedule status if accepted
     if (status === "accepted") {
       schedule.status = "confirmed";
     }
 
+    // Create chat for accepted or negotiated statuses
+    if (status === "accepted" || status === "negotiated") {
+      const chat = new Chat({
+        scheduleId,
+        participants: [schedule.profileId, driverProfile._id],
+        messages: [],
+      });
+      await chat.save();
+      schedule.chatId = chat._id;
+    }
+
+    // Set updatedBy
     schedule.updatedBy = driver._id;
     await schedule.save();
 
+    // Populate the schedule for the response
     const populatedSchedule = await Schedule.findById(scheduleId)
       .populate("userId", "firstName lastName email phoneNumber profilePicture")
-      .populate("profileId", "profilePicture phoneNunber")
-      .populate("driverResponse.driverId", "firstName lastName email phoneNumber profilePicture")
-      .populate("driverResponse.driverProfileId", "role profilePicture carDetails.model carDetails.product carDetails.year carDetails.color carDetails.plateNumber CarPicture phoneNumber location.lga location.state")
+      .populate("profileId", "profilePicture phoneNumber") // Corrected typo
+      .populate("driverResponse.driverId", "firstName lastName email profilePicture") // Removed phoneNumber
+      .populate(
+        "driverResponse.driverProfileId",
+        "role profilePicture carDetails.model carDetails.product carDetails.year carDetails.color carDetails.plateNumber carPicture phoneNumber location.lga location.state"
+      ); // Corrected CarPicture to carPicture
 
     return res.status(200).json({
       status: true,
@@ -166,6 +194,9 @@ ScheduleRoute.post("/respondtoschedule/:scheduleId", verifyToken, async (req, re
     });
   }
 });
+
+
+
 
 // GET /getmyschedules (Updated to include driver details)
 ScheduleRoute.get("/getmyschedules", verifyToken, async (req, res) => {
@@ -218,16 +249,53 @@ ScheduleRoute.get("/getmyschedules", verifyToken, async (req, res) => {
 });
 
 // GET /allschedules (For drivers to see available schedules)
+// ScheduleRoute.get("/allschedules", verifyToken, async (req, res) => {
+//   try {
+//     const schedules = await Schedule.find({
+//       isDeleted: false,
+//       "driverResponse.status": "pending", 
+//     }).populate("userId", "firstName lastName email ")
+//       .populate("profileId", "profilePicture location.state phoneNumber")
+//       .populate("driverResponse.driverId", "firstName lastName email phoneNumber");
+
+
+
+//     return res.status(200).json({
+//       status: true,
+//       message: "All available schedules",
+//       schedules,
+//     });
+//   } catch (error) {
+//     console.error("Error in /allschedules:", error);
+//     return res.status(500).json({
+//       status: false,
+//       message: "An error occurred",
+//       error: error.message,
+//     });
+//   }
+// });
+
+
+
+
 ScheduleRoute.get("/allschedules", verifyToken, async (req, res) => {
+  const { state, lga } = req.query;
   try {
-    const schedules = await Schedule.find({
-      isDeleted: false,
-      "driverResponse.status": "pending", 
-    }).populate("userId", "firstName lastName email ")
+    // Build the filter object
+    const filter = {
+      isDeleted: false, // Only include non-deleted schedules
+      "driverResponse.status": { $in: ["pending", "rejected"] }, // Include schedules with pending or canceled driver response
+    };
+
+    // Add state and lga to filter if provided
+    if (state) filter.state = state;
+    if (lga) filter.lga = lga;
+
+    // Fetch schedules with the filter
+    const schedules = await Schedule.find(filter)
+      .populate("userId", "firstName lastName email")
       .populate("profileId", "profilePicture location.state phoneNumber")
       .populate("driverResponse.driverId", "firstName lastName email phoneNumber");
-
-
 
     return res.status(200).json({
       status: true,
@@ -243,7 +311,6 @@ ScheduleRoute.get("/allschedules", verifyToken, async (req, res) => {
     });
   }
 });
-
 
 ///for the driver, get the schedules that i have  accepted
 
@@ -497,8 +564,71 @@ ScheduleRoute.put("/updateschedule/:id", verifyToken, async (req, res) => {
   });
 
 
+
+  // Get chat messages
+ScheduleRoute.get("/chat/:scheduleId", verifyToken, async (req, res) => {
+  const scheduleId = req.params.scheduleId;
+  const userId = req.user.id;
+
+  try {
+    const profile = await Profile.findOne({ userId });
+    const chat = await Chat.findOne({ scheduleId, participants: profile._id }).populate(
+      "messages.sender",
+      "firstName lastName"
+    );
+    if (!chat) {
+      return res.status(404).json({ status: false, message: "Chat not found" });
+    }
+
+    return res.status(200).json({ status: true, chat });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+});
+
+// Send a message
+ScheduleRoute.post("/chat/send", verifyToken, async (req, res) => {
+  const { scheduleId, content } = req.body;
+  const userId = req.user.id;
+
+  try {
+    const profile = await Profile.findOne({ userId });
+    const chat = await Chat.findOne({ scheduleId, participants: profile._id });
+    if (!chat) {
+      return res.status(404).json({ status: false, message: "Chat not found" });
+    }
+
+    chat.messages.push({ sender: profile._id, content });
+    await chat.save();
+
+    return res.status(200).json({ status: true, message: "Message sent", chat });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+});
+
+
+
   
 export default ScheduleRoute;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

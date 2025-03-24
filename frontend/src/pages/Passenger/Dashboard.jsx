@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import im from "../../assets/pic.jpg";
+import Slider from "react-slick";
+import "slick-carousel/slick/slick.css";
+import "slick-carousel/slick/slick-theme.css";
+import io from "socket.io-client"
 import { Link, useNavigate } from "react-router-dom";
 import {
   FaBell,
@@ -28,8 +32,12 @@ import im2 from "../../assets/Rectangle 90 (2).png";
 import im3 from "../../assets/Rectangle 90.png";
 import axios from "axios";
 import { statesAndLgas } from "../../stateAndLga";
+import { FaArrowLeft, FaArrowRight } from "react-icons/fa"; // Import arrow icons
 
+
+// Inside your Dashboard component:
 const Dashboard = () => {
+  const sliderRef = useRef(null);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -47,7 +55,10 @@ const Dashboard = () => {
   const [allSchedules, setAllSchedules] = useState([]);
   const [carData, setCarData] = useState(null);
   const [driverDetailsModal, setDriverDetailsModal] = useState(false); // Fixed syntax
-  const [selectedDriverSchedule, setSelectedDriverSchedule] = useState(null); // New state for selected schedule
+  const [selectedDriverSchedule, setSelectedDriverSchedule] = useState(null); 
+  const [chatModal, setChatModal] = useState(false); 
+  const [selectedChatScheduleId, setSelectedChatScheduleId] = useState(null); // Track chat schedule
+
   const [carForm, setCarForm] = useState({
     carDetails: { model: "", product: "", year: "", color: "", plateNumber: "" },
     picture: "",
@@ -59,6 +70,7 @@ const Dashboard = () => {
     date: "",
     state: "",
     lga: "",
+    pickUp: "",
     address: "",
     priceRange: { min: "", max: "" },
     description: "",
@@ -158,18 +170,18 @@ const Dashboard = () => {
                 pos === prevPositions[0]
                   ? 50
                   : pos === prevPositions[1]
-                  ? window.innerWidth - 50
-                  : pos === prevPositions[2]
-                  ? 50
-                  : window.innerWidth - 50,
+                    ? window.innerWidth - 50
+                    : pos === prevPositions[2]
+                      ? 50
+                      : window.innerWidth - 50,
               y:
                 pos === prevPositions[0]
                   ? 50
                   : pos === prevPositions[1]
-                  ? 50
-                  : pos === prevPositions[2]
-                  ? window.innerHeight - 50
-                  : window.innerHeight - 50,
+                    ? 50
+                    : pos === prevPositions[2]
+                      ? window.innerHeight - 50
+                      : window.innerHeight - 50,
             };
           }
 
@@ -351,24 +363,24 @@ const Dashboard = () => {
     }
   };
 
-  const fetchAllSchedules = async () => {
-    const token = localStorage.getItem("token");
-    try {
-      const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/allschedules`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.data.status) {
-        setAllSchedules(response.data.schedules);
-        console.log(response.data.schedules, "all schedules");
-      } else {
-        setAllSchedules([]);
-      }
-    } catch (error) {
-      console.error("Error fetching all schedules:", error);
-      setAllSchedules([]);
-      toast.error("Failed to fetch all schedules", { style: { background: "#F44336", color: "white" } });
-    }
-  };
+  // const fetchAllSchedules = async () => {
+  //   const token = localStorage.getItem("token");
+  //   try {
+  //     const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/allschedules`, {
+  //       headers: { Authorization: `Bearer ${token}` },
+  //     });
+  //     if (response.data.status) {
+  //       setAllSchedules(response.data.schedules);
+  //       console.log(response.data.schedules, "all schedules");
+  //     } else {
+  //       setAllSchedules([]);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching all schedules:", error);
+  //     setAllSchedules([]);
+  //     toast.error("Failed to fetch all schedules", { style: { background: "#F44336", color: "white" } });
+  //   }
+  // };
 
   useEffect(() => {
     if (activeTab === "ownACar") {
@@ -434,6 +446,85 @@ const Dashboard = () => {
     }
   };
 
+
+  const [chatMessages, setChatMessages] = useState({});
+  const [chatInput, setChatInput] = useState("");
+
+  const [filter, setFilter] = useState({ state: "", lga: "" });
+
+  // Fetch chat messages
+  const fetchChatMessages = async (scheduleId) => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/chat/${scheduleId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data.status) {
+        setChatMessages((prev) => ({ ...prev, [scheduleId]: response.data.chat.messages }));
+      }
+    } catch (error) {
+      console.error("Error fetching chat:", error);
+      toast.error("Failed to fetch chat messages");
+    }
+  };
+
+  // Send chat message
+  const sendChatMessage = async (scheduleId) => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await axios.post(
+        `${import.meta.env.VITE_BACKEND_URL}/api/schedule/chat/send`,
+        { scheduleId, content: chatInput },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (response.data.status) {
+        setChatMessages((prev) => ({
+          ...prev,
+          [scheduleId]: response.data.chat.messages,
+        }));
+        setChatInput("");
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast.error("Failed to send message");
+    }
+  };
+
+  // Update fetchAllSchedules with filter
+  const fetchAllSchedules = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/allschedules`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: filter, // Pass filter as query params
+      });
+      if (response.data.status) {
+        setAllSchedules(response.data.schedules);
+      } else {
+        setAllSchedules([]);
+      }
+    } catch (error) {
+      console.error("Error fetching all schedules:", error);
+      setAllSchedules([]);
+      toast.error("Failed to fetch all schedules");
+    }
+  };
+
+  // Update useEffect to include filter changes
+  useEffect(() => {
+    if (activeTab === "ownACar") {
+      fetchCarProfile();
+    } else if (activeTab === "schedule") {
+      fetchMySchedules();
+    } else if (activeTab === "allSchedules") {
+      const isDriver = data?.data?.role === "driver";
+      const isPassengerWithCar = data?.data?.role === "passenger" && carData;
+      if (isDriver || isPassengerWithCar) {
+        fetchAllSchedules();
+      }
+    }
+  }, [activeTab, data, carData, filter]);
+
   const profile = data?.data;
 
   const sidebarItems = [
@@ -486,9 +577,8 @@ const Dashboard = () => {
       ))}
 
       <div
-        className={`fixed top-4 right-0 z-50 w-64 p-4 bg-lime-900 text-white rounded-l-lg shadow-lg transform transition-transform duration-500 ease-in-out ${
-          showNotification ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`fixed top-4 right-0 z-50 w-64 p-4 bg-lime-900 text-white rounded-l-lg shadow-lg transform transition-transform duration-500 ease-in-out ${showNotification ? "translate-x-0" : "translate-x-full"
+          }`}
       >
         <div className="flex flex-wrap">
           <h3 className="text-lg font-semibold">Welcome Back!</h3>
@@ -507,9 +597,8 @@ const Dashboard = () => {
       </div>
 
       <div
-        className={`fixed inset-y-0 left-0 z-20 w-56 bg-activeColor text-white transform transition-transform duration-300 ease-in-out ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0 md:static md:w-1/6`}
+        className={`fixed inset-y-0 left-0 z-20 w-56 bg-activeColor text-white transform transition-transform duration-300 ease-in-out ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          } md:translate-x-0 md:static md:w-1/6`}
       >
         <div className="p-4 flex items-center justify-between md:justify-start">
           <h2 className="text-2xl font-bold tracking-wide">e-Ride</h2>
@@ -522,9 +611,8 @@ const Dashboard = () => {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center p-4 hover:bg-customColor transition-colors duration-200 ${
-                activeTab === item.id ? "bg-customPink shadow-inner" : ""
-              }`}
+              className={`w-full flex items-center p-4 hover:bg-customColor transition-colors duration-200 ${activeTab === item.id ? "bg-customPink shadow-inner" : ""
+                }`}
             >
               <item.icon size={20} className="mr-3" />
               <span className="text-sm font-medium">{item.label}</span>
@@ -916,9 +1004,8 @@ const Dashboard = () => {
                       <button
                         type="submit"
                         disabled={loading}
-                        className={`w-full py-3 bg-customGreen text-white rounded-lg font-semibold hover:bg-green-700 transition-colors duration-300 ${
-                          loading ? "opacity-50 cursor-not-allowed" : ""
-                        }`}
+                        className={`w-full py-3 bg-customGreen text-white rounded-lg font-semibold hover:bg-green-700 transition-colors duration-300 ${loading ? "opacity-50 cursor-not-allowed" : ""
+                          }`}
                       >
                         {loading ? "Uploading..." : "Register Car"}
                       </button>
@@ -961,9 +1048,8 @@ const Dashboard = () => {
                                 <p>
                                   <strong className="font-semibold">Status:</strong>{" "}
                                   <span
-                                    className={`capitalize ${
-                                      schedule.status === "confirmed" ? "text-customPink" : "text-yellow-600"
-                                    }`}
+                                    className={`capitalize ${schedule.status === "confirmed" ? "text-customPink" : "text-yellow-600"
+                                      }`}
                                   >
                                     {schedule.status}
                                   </span>
@@ -971,13 +1057,12 @@ const Dashboard = () => {
                                 <p>
                                   <strong className="font-semibold">Driver Response:</strong>{" "}
                                   <span
-                                    className={`capitalize ${
-                                      schedule.driverResponse.status === "accepted"
+                                    className={`capitalize ${schedule.driverResponse.status === "accepted"
                                         ? "text-green-600"
                                         : schedule.driverResponse.status === "rejected"
-                                        ? "text-red-600"
-                                        : "text-gray-600"
-                                    }`}
+                                          ? "text-red-600"
+                                          : "text-gray-600"
+                                      }`}
                                   >
                                     {schedule.driverResponse.status}
                                   </span>
@@ -1082,7 +1167,7 @@ const Dashboard = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Time (e.g., 10:00 AM)</label>
                     <input
-                      type="text"
+                      type="time"
                       value={scheduleForm.time}
                       onChange={(e) => setScheduleForm({ ...scheduleForm, time: e.target.value })}
                       className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-e-ride-purple"
@@ -1099,8 +1184,19 @@ const Dashboard = () => {
                       required
                     />
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">State</label>
+                    <label className="block text-sm font-medium text-gray-700">Pick-up address</label>
+                    <input
+                      type="text"
+                      value={scheduleForm.pickUp}
+                      onChange={(e) => setScheduleForm({ ...scheduleForm, pickUp: e.target.value })}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-e-ride-purple"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">State (destination)</label>
                     <select
                       value={scheduleForm.state}
                       onChange={(e) => setScheduleForm({ ...scheduleForm, state: e.target.value, lga: "" })}
@@ -1116,7 +1212,7 @@ const Dashboard = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">LGA</label>
+                    <label className="block text-sm font-medium text-gray-700">LGA (destination)</label>
                     <select
                       value={scheduleForm.lga}
                       onChange={(e) => setScheduleForm({ ...scheduleForm, lga: e.target.value })}
@@ -1134,7 +1230,7 @@ const Dashboard = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Address</label>
+                    <label className="block text-sm font-medium text-gray-700">Address(destination)</label>
                     <input
                       type="text"
                       value={scheduleForm.address}
@@ -1189,9 +1285,8 @@ const Dashboard = () => {
                   <button
                     type="submit"
                     disabled={loading}
-                    className={`w-full py-2 bg-activeColor text-white rounded-lg hover:bg-customGreen transition-colors ${
-                      loading ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
+                    className={`w-full py-2 bg-activeColor text-white rounded-lg hover:bg-customGreen transition-colors ${loading ? "opacity-50 cursor-not-allowed" : ""
+                      }`}
                   >
                     {loading ? "Posting..." : "Post Schedule"}
                   </button>
@@ -1203,89 +1298,180 @@ const Dashboard = () => {
                     <p className="text-gray-600">No schedules found.</p>
                   ) : (
                     <div className="space-y-4">
-                      {schedules.map((schedule) => (
-                        <div key={schedule._id} className="p-4 bg-gray-50 rounded-lg shadow-sm">
-                          <p>
-                            <strong>Time:</strong> {schedule.formattedTime}
-                          </p>
-                          <p>
-                            <strong>Location:</strong> {schedule.state}, {schedule.lga}, {schedule.address}
-                          </p>
-                          <p>
-                            <strong>Price Range:</strong> ₦{schedule.priceRange.min} - ₦{schedule.priceRange.max}
-                          </p>
-                          {schedule.description && (
+                      <Slider
+                        ref={sliderRef} // Attach ref to slider
+                        dots={true}
+                        infinite={true}
+                        speed={500}
+                        slidesToShow={1}
+                        slidesToScroll={1}
+                        arrows={false} // Disable default arrows
+                        className="w-full"
+                        prevArrow={<button className="slick-prev bg-gray-800 text-white p-2 rounded-full" />}
+                        nextArrow={<button className="slick-next bg-gray-800 text-white p-2 rounded-full" />}
+                      >
+                        {schedules.map((schedule) => (
+                          <div key={schedule._id} className="p-4 bg-gray-50 rounded-lg shadow-sm">
                             <p>
-                              <strong>Description:</strong> {schedule.description}
+                              <strong>Time:</strong> {schedule.formattedTime}
                             </p>
-                          )}
-                          <p>
-                            <strong>Status: </strong>
-                            <span
-                              className={
-                                schedule.status === "confirmed"
-                                  ? "text-green-600"
-                                  : schedule.status === "pending"
-                                  ? "text-yellow-600"
-                                  : "text-red-600"
-                              }
-                            >
-                              {schedule.status}
-                            </span>
-                          </p>
-
-                          <h3 className="font-bold text-customPink text-center">Driver details</h3>
-
-                          <p>
-                            <strong>Driver Response:</strong>{" "}
-                            <span
-                              className={
-                                schedule.driverResponse.status === "accepted"
-                                  ? "text-green-600 font-bold"
-                                  : schedule.driverResponse.status === "pending"
-                                  ? "text-yellow-500 font-bold"
-                                  : "text-red-500"
-                              }
-                            >
-                              {schedule.driverResponse.status}
-                            </span>
-                          </p>
-                          {schedule.driverResponse.status === "negotiated" && (
                             <p>
-                              <strong>Negotiated Price:</strong> ₦{schedule.driverResponse.negotiatedPrice}
+                              <strong>Location:</strong> {schedule.state}, {schedule.lga}, {schedule.address}
                             </p>
-                          )}
-                          {schedule.driverResponse.driverId && (
-                            <div className="mt-2">
+                            <p>
+                              <strong>Price Range:</strong> ₦{schedule.priceRange.min} - ₦{schedule.priceRange.max}
+                            </p>
+                            {schedule.description && (
                               <p>
-                                <strong>Driver:</strong> {schedule.driverResponse.driverId.firstName}{" "}
-                                {schedule.driverResponse.driverId.lastName}
+                                <strong>Description:</strong> {schedule.description}
                               </p>
-                              <p>
-                                <strong>Email:</strong> {schedule.driverResponse.driverId.email}
-                              </p>
-                              <p>
-                                <strong>Phone:</strong> {schedule.driverResponse.driverProfileId.phoneNumber}
-                              </p>
-                              <p>
-                                <strong>Location:</strong> {schedule.driverResponse.driverProfileId.location.state},{" "}
-                                {schedule.driverResponse.driverProfileId.location.lga}
-                              </p>
-                              <button
-                                onClick={() => {
-                                  setDriverDetailsModal(true);
-                                  setSelectedDriverSchedule(schedule); // Set the selected schedule
-                                }}
-                                className="bg-green-700 p-3 text-white rounded-lg ml-17"
+                            )}
+                            <p>
+                              <strong>Status: </strong>
+                              <span
+                                className={
+                                  schedule.status === "confirmed"
+                                    ? "text-green-600"
+                                    : schedule.status === "pending"
+                                      ? "text-yellow-600"
+                                      : "text-red-600"
+                                }
                               >
-                                view driver details
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                                {schedule.status}
+                              </span>
+                            </p>
+
+                            <h3 className="font-bold text-customPink text-center">Driver details</h3>
+
+                            <p>
+                              <strong>Driver Response:</strong>{" "}
+                              <span
+                                className={
+                                  schedule.driverResponse.status === "accepted"
+                                    ? "text-green-600 font-bold"
+                                    : schedule.driverResponse.status === "pending"
+                                      ? "text-yellow-500 font-bold"
+                                      : schedule.driverResponse.status === "negotiated"
+                                        ? "text-blue-600 font-bold"
+                                        : "text-red-600 font-bold"
+                                }
+                              >
+                                {schedule.driverResponse.status}
+                              </span>
+                            </p>
+                            {schedule.driverResponse.status === "negotiated" && (
+                              <p>
+                                <strong>Negotiated Price:</strong> ₦{schedule.driverResponse.negotiatedPrice}
+                              </p>
+                            )}
+                          {schedule.driverResponse.driverId && (schedule.driverResponse.status === "accepted" || schedule.driverResponse.status === "negotiated") && (
+                              <div className="mt-2">
+                                <p>
+                                  <strong>Driver:</strong> {schedule.driverResponse.driverId.firstName}{" "}
+                                  {schedule.driverResponse.driverId.lastName}
+                                </p>
+                                <p>
+                                  <strong>Email:</strong> {schedule.driverResponse.driverId.email}
+                                </p>
+                                <p>
+                                  <strong>Phone:</strong> {schedule.driverResponse.driverProfileId.phoneNumber}
+                                </p>
+                                <p>
+                                  <strong>Location:</strong> {schedule.driverResponse.driverProfileId.location.state},{" "}
+                                  {schedule.driverResponse.driverProfileId.location.lga}
+                                </p>
+                                <div className="flex flex-wrap space-x-2">
+                                <button
+                                  onClick={() => {
+                                    setDriverDetailsModal(true);
+                                    setSelectedDriverSchedule(schedule);
+                                  }}
+                                  className="bg-green-700 p-3 text-white rounded-lg ml-17"
+                                >
+                                  view driver details
+                                </button>
+                                <button
+                            onClick={() => {
+                              setChatModal(true);
+                              setSelectedChatScheduleId(schedule._id);
+                              fetchChatMessages(schedule._id); // Fetch messages when opening chat
+                            }}
+                            className="bg-blue-600 p-3 text-white rounded-lg"
+                          >
+                            Chat with Driver
+                          </button>
+
+                                </div>
+                          
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </Slider>
+                      <button
+                        onClick={() => sliderRef.current.slickPrev()}
+                        className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-12 bg-gray-800 text-white p-3 rounded-full hover:bg-gray-600"
+                      >
+                        <FaArrowLeft size={20} />
+                      </button>
+                      <button
+                        onClick={() => sliderRef.current.slickNext()}
+                        className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-12 bg-gray-800 text-white p-3 rounded-full hover:bg-gray-600"
+                      >
+                        <FaArrowRight size={20} />
+                      </button>
                     </div>
                   )}
+
+{chatModal && selectedChatScheduleId && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-xl shadow-xl max-w-md w-full">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">Chat with Driver</h3>
+                <div className="h-64 overflow-y-auto mb-4 p-2 bg-gray-100 rounded-lg">
+                  {chatMessages[selectedChatScheduleId]?.length > 0 ? (
+                    chatMessages[selectedChatScheduleId].map((msg, index) => (
+                      <div
+                        key={index}
+                        className={`mb-2 ${
+                          msg.sender._id === data?.data?._id ? "text-right" : "text-left"
+                        }`}
+                      >
+                        <p className="inline-block p-2 rounded-lg bg-blue-100">{msg.content}</p>
+                        <p className="text-xs text-gray-500">{new Date(msg.timestamp).toLocaleTimeString()}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-600">No messages yet</p>
+                  )}
+                </div>
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    className="flex-1 p-2 border border-gray-300 rounded-lg"
+                    placeholder="Type a message..."
+                  />
+                  <button
+                    onClick={() => sendChatMessage(selectedChatScheduleId)}
+                    className="py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Send
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    setChatModal(false);
+                    setSelectedChatScheduleId(null);
+                    setChatInput("");
+                  }}
+                  className="mt-4 py-2 px-4 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )} 
 
                   {/* Driver Details Modal */}
                   {driverDetailsModal && selectedDriverSchedule && (
@@ -1310,17 +1496,17 @@ const Dashboard = () => {
                               alt="Driver Profile"
                               className="w-full h-40 object-cover rounded-lg"
                             />
-                               <button
-                                  onClick={() =>
-                                    window.open(
-                                      selectedDriverSchedule.driverResponse.driverProfileId.profilePicture,
-                                      "_blank"
-                                    )
-                                  }
-                                  className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors duration-200"
-                                >
-                                  View
-                                </button>
+                            <button
+                              onClick={() =>
+                                window.open(
+                                  selectedDriverSchedule.driverResponse.driverProfileId.profilePicture,
+                                  "_blank"
+                                )
+                              }
+                              className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors duration-200"
+                            >
+                              View
+                            </button>
                           </div>
                           <div className="space-y-2">
                             <p>
@@ -1347,22 +1533,22 @@ const Dashboard = () => {
                             <p>
                               <strong>Car Picture:</strong>{" "}
                               <img
-                                  className="w-16 h-16 rounded-full border-4 border-customGreen shadow-lg object-cover transition-all duration-300 hover:scale-105 hover:shadow-xl hover:border-customGreen-dark"
-                                  src={ selectedDriverSchedule.driverResponse.driverProfileId.carPicture || "https://via.placeholder.com/150"}
-                                  alt={`${ selectedDriverSchedule.driverResponse.driverId?.firstName} ${selectedDriverSchedule.driverResponse.driverId?.lastName}`}
-                                />
+                                className="w-16 h-16 rounded-full border-4 border-customGreen shadow-lg object-cover transition-all duration-300 hover:scale-105 hover:shadow-xl hover:border-customGreen-dark"
+                                src={selectedDriverSchedule.driverResponse.driverProfileId.carPicture || "https://via.placeholder.com/150"}
+                                alt={`${selectedDriverSchedule.driverResponse.driverId?.firstName} ${selectedDriverSchedule.driverResponse.driverId?.lastName}`}
+                              />
                               <button
-                                  onClick={() =>
-                                    window.open(
-                                      selectedDriverSchedule.driverResponse.driverProfileId.carPicture,
-                                      "_blank"
-                                    )
-                                  }
-                                  className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors duration-200"
-                                >
-                                  View
-                                </button>
-                            
+                                onClick={() =>
+                                  window.open(
+                                    selectedDriverSchedule.driverResponse.driverProfileId.carPicture,
+                                    "_blank"
+                                  )
+                                }
+                                className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors duration-200"
+                              >
+                                View
+                              </button>
+
                             </p>
                             <p>
                               <strong>Car Color:</strong>{" "}

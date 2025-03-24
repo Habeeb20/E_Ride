@@ -22,6 +22,7 @@ import {
   FaShieldAlt,
   FaCalendar,
 } from "react-icons/fa";
+import { statesAndLgas } from "../../stateAndLga";
 import { toast } from "sonner";
 import im1 from "../../assets/Rectangle 90 (1).png";
 import im2 from "../../assets/Rectangle 90 (2).png";
@@ -48,6 +49,7 @@ const DriverDashboard = () => {
   const [selectedScheduleId, setSelectedScheduleId] = useState(null);
   const [negotiatedPriceInput, setNegotiatedPriceInput] = useState("");
   const [myAcceptedSchedule, setMyAcceptedSchedule] = useState([])
+
   const animationRef = useRef();
   const navigate = useNavigate();
 
@@ -154,32 +156,32 @@ const DriverDashboard = () => {
     }
   };
 
-  const fetchAllSchedules = async () => {
-    const token = localStorage.getItem("token");
-    try {
-      const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/allschedules`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.data.status) {
-        setAllSchedules(response.data.schedules);
-      } else {
-        setAllSchedules([]);
-      }
-    } catch (error) {
-      console.error("Error fetching all schedules:", error);
-      setAllSchedules([]);
-      toast.error("Failed to fetch all schedules", { style: { background: "#F44336", color: "white" } });
-    }
-  };
+  // const fetchAllSchedules = async () => {
+  //   const token = localStorage.getItem("token");
+  //   try {
+  //     const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/allschedules`, {
+  //       headers: { Authorization: `Bearer ${token}` },
+  //     });
+  //     if (response.data.status) {
+  //       setAllSchedules(response.data.schedules);
+  //     } else {
+  //       setAllSchedules([]);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching all schedules:", error);
+  //     setAllSchedules([]);
+  //     toast.error("Failed to fetch all schedules", { style: { background: "#F44336", color: "white" } });
+  //   }
+  // };
 
-  useEffect(() => {
-    if (activeTab === "schedules") {
-      const isDriver = data?.data?.role === "driver";
-      if (isDriver) {
-        fetchAllSchedules();
-      }
-    }
-  }, [activeTab, data]);
+  // useEffect(() => {
+  //   if (activeTab === "schedules") {
+  //     const isDriver = data?.data?.role === "driver";
+  //     if (isDriver) {
+  //       fetchAllSchedules();
+  //     }
+  //   }
+  // }, [activeTab, data]);
 
   const handleScheduleResponse = async (scheduleId, action, negotiatedPrice = null) => {
     const token = localStorage.getItem("token");
@@ -226,7 +228,7 @@ const DriverDashboard = () => {
       }
     }
     fetchMyAccepedtSchedule()
-  })
+  }, [])
 
   const confirmNegotiation = async () => {
     const token = localStorage.getItem("token");
@@ -249,6 +251,81 @@ const DriverDashboard = () => {
       toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
     }
   };
+
+
+    const [chatMessages, setChatMessages] = useState({});
+  const [chatInput, setChatInput] = useState("");
+  const [selectedChatScheduleId, setSelectedChatScheduleId] = useState(null);
+  const [filter, setFilter] = useState({ state: "", lga: "" });
+  
+  // Fetch chat messages
+  const fetchChatMessages = async (scheduleId) => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/chat/${scheduleId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data.status) {
+        setChatMessages((prev) => ({ ...prev, [scheduleId]: response.data.chat.messages }));
+      }
+    } catch (error) {
+      console.error("Error fetching chat:", error);
+      toast.error("Failed to fetch chat messages");
+    }
+  };
+  
+  // Send chat message
+  const sendChatMessage = async (scheduleId) => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await axios.post(
+        `${import.meta.env.VITE_BACKEND_URL}/api/schedule/chat/send`,
+        { scheduleId, content: chatInput },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (response.data.status) {
+        setChatMessages((prev) => ({
+          ...prev,
+          [scheduleId]: response.data.chat.messages,
+        }));
+        setChatInput("");
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast.error("Failed to send message");
+    }
+  };
+  
+  // Update fetchAllSchedules with filter
+  const fetchAllSchedules = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/allschedules`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: filter, // Pass filter as query params
+      });
+      if (response.data.status) {
+        setAllSchedules(response.data.schedules);
+      } else {
+        setAllSchedules([]);
+      }
+    } catch (error) {
+      console.error("Error fetching all schedules:", error);
+      setAllSchedules([]);
+      toast.error("Failed to fetch all schedules");
+    }
+  };
+  
+  // Update useEffect to include filter changes
+  useEffect(() => {
+    if (activeTab === "schedules") {
+      const isDriver = data?.data?.role === "driver";
+      if (isDriver) {
+        fetchAllSchedules();
+      }
+    }
+  }, [activeTab, data, filter]);
+  
 
   const profile = data?.data;
   const isDriver = profile?.role === "driver";
@@ -486,6 +563,42 @@ const DriverDashboard = () => {
                     <p className="text-gray-600">No schedules found.</p>
                   ) : (
                     <div className="space-y-4">
+                      <div className="mb-6">
+      <div className="flex space-x-4">
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700">State</label>
+          <select
+            value={filter.state}
+            onChange={(e) => setFilter({ ...filter, state: e.target.value, lga: "" })}
+            className="w-full p-2 border border-gray-300 rounded-lg"
+          >
+            <option value="">All States</option>
+            {Object.keys(statesAndLgas).map((state) => (
+              <option key={state} value={state}>
+                {state}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700">LGA</label>
+          <select
+            value={filter.lga}
+            onChange={(e) => setFilter({ ...filter, lga: e.target.value })}
+            className="w-full p-2 border border-gray-300 rounded-lg"
+            disabled={!filter.state}
+          >
+            <option value="">All LGAs</option>
+            {filter.state &&
+              statesAndLgas[filter.state].map((lga) => (
+                <option key={lga} value={lga}>
+                  {lga}
+                </option>
+              ))}
+          </select>
+        </div>
+      </div>
+    </div>
                       {allSchedules.map((schedule) => (
                         <div key={schedule._id} className="p-4 bg-gray-50 rounded-lg shadow-sm">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -519,6 +632,9 @@ const DriverDashboard = () => {
                               </p>
                               <p>
                                 <strong>Time:</strong> {schedule.formattedTime}
+                              </p>
+                              <p>
+                                <strong>Pick up address:</strong> {schedule.pickUp}
                               </p>
                               <p>
                                 <strong>Location:</strong> {schedule.state}, {schedule.lga}, {schedule.address}
@@ -562,15 +678,16 @@ const DriverDashboard = () => {
                               )}
                               {schedule.driverResponse.driverId && (
                                 <div className="mt-2 p-2 bg-gray-100 rounded-lg">
+                                  <p>status: <span className={schedule.driverResponse.status === "rejected" ? "text-red-600" : "text-green-600"}>{schedule.driverResponse.status}</span></p>
                                   <p>
-                                    <strong>Accepted By Driver:</strong> {schedule.driverResponse.driverId.firstName}{" "}
+                                    <strong> Driver's Name:</strong> {schedule.driverResponse.driverId.firstName}{" "}
                                     {schedule.driverResponse.driverId.lastName}
                                   </p>
                                   <p>
                                     <strong>Email:</strong> {schedule.driverResponse.driverId.email}
                                   </p>
                                   <p>
-                                    <strong>Phone:</strong> {schedule.driverResponse.driverId.phoneNumber}
+                                    <strong>Phone:</strong> {schedule.driverResponse.driverProfileId.phoneNumber}
                                   </p>
                                 </div>
                               )}
@@ -611,6 +728,17 @@ const DriverDashboard = () => {
                               </button>
                             </div>
                           )}
+                          {(schedule.driverResponse.status === "accepted" || schedule.driverResponse.status === "negotiated") && (
+              <button
+                onClick={() => {
+                  setSelectedChatScheduleId(schedule._id);
+                  fetchChatMessages(schedule._id);
+                }}
+                className="mt-4 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Chat with Passenger
+              </button>
+            )}
                         </div>
                       ))}
                     </div>
@@ -716,14 +844,83 @@ const DriverDashboard = () => {
                 {schedule.driverResponse.status}
               </span>
             </p>
+            <button
+              onClick={() => {
+                setSelectedChatScheduleId(schedule._id);
+                fetchChatMessages(schedule._id);
+              }}
+              className="mt-4 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Chat with Passenger
+            </button>
           </div>
         ))}
       </div>
     ) : (
       <h4 className="text-gray-600 text-center">You have not accepted any schedule yet</h4>
     )}
-  </div>
-)}
+
+{selectedChatScheduleId && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-xl shadow-xl max-w-md w-full">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">Chat with Passenger</h3>
+              <div className="h-64 overflow-y-auto mb-4 p-2 bg-gray-100 rounded-lg">
+                {chatMessages[selectedChatScheduleId]?.length > 0 ? (
+                  chatMessages[selectedChatScheduleId].map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`mb-2 ${
+                        msg.sender._id === data?.data?.driverProfileId 
+                          ? "text-right text-black font-bold"
+                          : "text-left text-gray-800 font-semibold"
+                      }`}
+                    >
+                      <p
+                        className={`inline-block p-2 rounded-lg ${
+                          msg.sender._id === data?.data?.driverProfileId ? "bg-customPink" : "bg-blue-100"
+                        }`}
+                      >
+                        {msg.content}
+                      </p>
+                      <p className="text-xs text-gray-500">{new Date(msg.timestamp).toLocaleTimeString()}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-600">No messages yet</p>
+                )}
+              </div>
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  className="flex-1 p-2 border border-gray-300 rounded-lg"
+                  placeholder="Type a message..."
+                />
+                <button
+                  onClick={() => sendChatMessage(selectedChatScheduleId)}
+                  className="py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Send
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedChatScheduleId(null);
+                  setChatInput("");
+                }}
+                className="mt-4 py-2 px-4 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+    
+
+
 
           </main>
         </div>
