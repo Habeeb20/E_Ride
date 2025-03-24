@@ -14,6 +14,9 @@ const scheduleSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+
+    customerId: { type: mongoose.Schema.Types.ObjectId, ref: "Auth", required: true },
+  status: { type: String, enum: ["pending", "confirmed", "completed", "cancelled"], default: "pending" },
     ownAcarId:{
         type: mongoose.Schema.Types.ObjectId,
         ref: "OwnAcar"
@@ -64,6 +67,8 @@ const scheduleSchema = new mongoose.Schema(
       },
     },
     driverResponse: {
+    
+      driverId: { type: mongoose.Schema.Types.ObjectId, ref: "Auth" },
       status: {
         type: String,
         enum: {
