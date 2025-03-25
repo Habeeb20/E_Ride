@@ -76,14 +76,7 @@ const scheduleSchema = new mongoose.Schema(
     driverResponse: {
     
       driverId: { type: mongoose.Schema.Types.ObjectId, ref: "Auth" },
-      status: {
-        type: String,
-        enum: {
-          values: ["pending", "accepted", "negotiated", "rejected"],
-          message: "{VALUE} is not a valid driver response status",
-        },
-        default: "pending",
-      },
+       
       negotiatedPrice: {
         type: Number,
         min: [0, "Negotiated price cannot be negative"],

@@ -3,6 +3,7 @@ import im from "../../assets/pic.jpg";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
+import { nigeriaAirportsByState } from "../../airportAndState";
 import io from "socket.io-client"
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -25,6 +26,7 @@ import {
   FaPhone,
   FaShieldAlt,
   FaCalendar,
+  FaCalendarCheck
 } from "react-icons/fa";
 import { toast } from "sonner";
 import im1 from "../../assets/Rectangle 90 (1).png";
@@ -58,7 +60,7 @@ const Dashboard = () => {
   const [selectedDriverSchedule, setSelectedDriverSchedule] = useState(null); 
   const [chatModal, setChatModal] = useState(false); 
   const [selectedChatScheduleId, setSelectedChatScheduleId] = useState(null); // Track chat schedule
-
+  const [airport, setAirport] = useState([])
   const [carForm, setCarForm] = useState({
     carDetails: { model: "", product: "", year: "", color: "", plateNumber: "" },
     picture: "",
@@ -82,6 +84,15 @@ const Dashboard = () => {
   const [showNegotiationModal, setShowNegotiationModal] = useState(false);
   const [selectedScheduleId, setSelectedScheduleId] = useState(null);
   const [negotiatedPriceInput, setNegotiatedPriceInput] = useState("");
+  const [pickup, setPickup] = useState({
+    state:"",
+    airportName:"",
+    homeAddress:"",
+    time:"",
+    pickupOrdropoff: "",
+    date:""
+  })
+  const [pickupModal, setPickupModals] = useState(false)
 
   const handleCloseNotification = () => {
     setShowNotification(false);
@@ -525,6 +536,61 @@ const Dashboard = () => {
     }
   }, [activeTab, data, carData, filter]);
 
+  const fetchMyAirportsPickups= async () => {
+    const token = localStorage.getItem("token")
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/airport/getmyairport`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data.status) {
+        setAirport(response.data.airport);
+        console.log(response.data.airport);
+      } else {
+        setAirport([]);
+      }
+    } catch (error) {
+      console.error("Error fetching schedules:", error);
+      setAirport([]);
+      toast.error("Failed to fetch schedules", { style: { background: "#F44336", color: "white" } });
+    }
+  }
+
+
+  const handleAirportPickup = async(e) => {
+    e.preventDefault()
+    const token = localStorage.getItem("token");
+    try {
+      setLoading(true)
+      const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/airport/postairport`, pickup,{
+        headers: {Authorization: `Bearer ${token}`}
+      })
+      if(response.data.status){
+        toast.success("your airport pickup/dropoff posted, available  driver will accept or negotiate with you shortly",  { style: { background: "#4CAF50", color: "white" } })
+        fetchMyAirportsPickups()
+        setPickup({
+          state:"",
+          homeAddress:"",
+          airportName:"",
+          time:""
+        })
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || "Failed to post schedule";
+      toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+
+  useEffect(() => {
+
+    fetchMyAirportsPickups()
+  })
+
+
+  
+
   const profile = data?.data;
 
   const sidebarItems = [
@@ -538,18 +604,18 @@ const Dashboard = () => {
     { id: "settings", label: "Settings", icon: FaCog },
     { id: "ownACar", label: "own a car?", icon: FaCar },
     { id: "schedule", label: "have a schedule?", icon: FaCalendar },
+    { id: "bookings", label: "Your Bookings", icon: FaCalendarCheck },
   ];
 
   const suggestions = [
-    { icon: FaCar, label: "e-ride hauling", color: "bg-green-100" },
-    { icon: FaCar, label: "car hire per hour", color: "bg-pink-100" },
-    { icon: FaPlane, label: "airport pickup", color: "bg-purple-100" },
-    { icon: FaPlane, label: "airport drop off", color: "bg-gray-100" },
+
+    { icon: FaPlane, label: "airport pickup", color: "bg-purple-100", onClick: () => setPickupModals(true)},
+    { icon: FaPlane, label: "airport drop off", color: "bg-gray-100", onClick: () => setPickupModals(true) },
     { icon: FaTruck, label: "pickup lorry", color: "bg-blue-100" },
     { icon: FaBus, label: "bus travel", color: "bg-yellow-100" },
     { icon: FaTruck, label: "pickup van", color: "bg-green-100" },
     { icon: FaTrailer, label: "pickup trailer", color: "bg-pink-100" },
-    { icon: FaSuitcase, label: "airport drop off", color: "bg-gray-100" },
+  
   ];
 
   const isDriver = profile?.role === "driver";
@@ -827,14 +893,132 @@ const Dashboard = () => {
                       <button
                         key={index}
                         className={`${suggestion.color} p-4 rounded-lg flex items-center justify-center gap-2 text-gray-800 hover:shadow-md transition-shadow`}
+                        onClick={suggestion.onClick}
                       >
                         <Icon size={24} />
                         <span className="text-sm font-medium">{suggestion.label}</span>
                       </button>
                     );
                   })}
+
+{pickupModal && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[70vh] overflow-y-auto transform transition-all duration-300 hover:shadow-3xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-2xl font-bold text-gray-900 tracking-tight">Pick Up / Drop Off</h3>
+              <button
+                onClick={() => setPickupModals(false)}
+                className="text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={handleAirportPickup} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mode</label>
+                <select
+                  value={pickup.pickupOrdropoff}
+                  onChange={(e) => setPickup({ ...pickup, pickupOrdropoff: e.target.value })}
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 text-gray-800"
+                  required
+                >
+                  <option value="">Select</option>
+                  <option value="pickup">Pick Up</option>
+                  <option value="dropoff">Drop Off</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Pick Up/Drop Off Address</label>
+                <input
+                  type="text"
+                  value={pickup.homeAddress}
+                  onChange={(e) => setPickup({ ...pickup, homeAddress: e.target.value })}
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 text-gray-800"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">State (Destination)</label>
+                <select
+                  value={pickup.state}
+                  onChange={(e) => setPickup({ ...pickup, state: e.target.value, airportName: "" })} // Reset airportName when state changes
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 text-gray-800"
+                  required
+                >
+                  <option value="">Select a State</option>
+                  {Object.keys(nigeriaAirportsByState).map((state) => (
+                    <option key={state} value={state}>
+                      {state}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Airport</label>
+                {/* Debugging log */}
+                {console.log("Selected state:", pickup.state)}
+                {console.log("Airports:", pickup.state ? nigeriaAirportsByState[pickup.state] : "No state selected")}
+                <select
+                  value={pickup.airportName}
+                  onChange={(e) => setPickup({ ...pickup, airportName: e.target.value })}
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 text-gray-800 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  required
+                  disabled={!pickup.state}
+                >
+                  <option value="">Select an Airport</option>
+                  {pickup.state &&
+                    nigeriaAirportsByState[pickup.state].map((airport) => (
+                      <option key={airport} value={airport}>
+                        {airport}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                <input
+                  type="time"
+                  value={pickup.time}
+                  onChange={(e) => setPickup({ ...pickup, time: e.target.value })}
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 text-gray-800"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={pickup.date}
+                  onChange={(e) => setPickup({ ...pickup, date: e.target.value })}
+                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 text-gray-800"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className={`w-full py-3 px-4 bg-customPink text-white rounded-lg font-semibold text-base tracking-tight hover:bg-activeColor text-black transition-all duration-200 ${
+                  loading ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+              >
+                {loading ? "Posting..." : "Post Your Request"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
                 </div>
               </div>
+
+
+       
             )}
 
             {activeTab === "settings" && (
@@ -1326,6 +1510,318 @@ const Dashboard = () => {
                                 <strong>Description:</strong> {schedule.description}
                               </p>
                             )}
+                            <p>
+                              <strong>Status: </strong>
+                              <span
+                                className={
+                                  schedule.status === "confirmed"
+                                    ? "text-green-600"
+                                    : schedule.status === "pending"
+                                      ? "text-yellow-600"
+                                      : "text-red-600"
+                                }
+                              >
+                                {schedule.status}
+                              </span>
+                            </p>
+
+                            <h3 className="font-bold text-customPink text-center">Driver details</h3>
+
+                            <p>
+                              <strong>Driver Response:</strong>{" "}
+                              <span
+                                className={
+                                  schedule.driverResponse.status === "accepted"
+                                    ? "text-green-600 font-bold"
+                                    : schedule.driverResponse.status === "pending"
+                                      ? "text-yellow-500 font-bold"
+                                      : schedule.driverResponse.status === "negotiated"
+                                        ? "text-blue-600 font-bold"
+                                        : "text-red-600 font-bold"
+                                }
+                              >
+                                {schedule.driverResponse.status}
+                              </span>
+                            </p>
+                            {schedule.driverResponse.status === "negotiated" && (
+                              <p>
+                                <strong>Negotiated Price:</strong> ₦{schedule.driverResponse.negotiatedPrice}
+                              </p>
+                            )}
+                          {schedule.driverResponse.driverId && (schedule.driverResponse.status === "accepted" || schedule.driverResponse.status === "negotiated") && (
+                              <div className="mt-2">
+                                <p>
+                                  <strong>Driver:</strong> {schedule.driverResponse.driverId.firstName}{" "}
+                                  {schedule.driverResponse.driverId.lastName}
+                                </p>
+                                <p>
+                                  <strong>Email:</strong> {schedule.driverResponse.driverId.email}
+                                </p>
+                                <p>
+                                  <strong>Phone:</strong> {schedule.driverResponse.driverProfileId.phoneNumber}
+                                </p>
+                                <p>
+                                  <strong>Location:</strong> {schedule.driverResponse.driverProfileId.location.state},{" "}
+                                  {schedule.driverResponse.driverProfileId.location.lga}
+                                </p>
+                                <div className="flex flex-wrap space-x-2">
+                                <button
+                                  onClick={() => {
+                                    setDriverDetailsModal(true);
+                                    setSelectedDriverSchedule(schedule);
+                                  }}
+                                  className="bg-green-700 p-3 text-white rounded-lg ml-17"
+                                >
+                                  view driver details
+                                </button>
+                                <button
+                            onClick={() => {
+                              setChatModal(true);
+                              setSelectedChatScheduleId(schedule._id);
+                              fetchChatMessages(schedule._id); // Fetch messages when opening chat
+                            }}
+                            className="bg-blue-600 p-3 text-white rounded-lg"
+                          >
+                            Chat with Driver
+                          </button>
+
+                                </div>
+                          
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </Slider>
+                      <button
+                        onClick={() => sliderRef.current.slickPrev()}
+                        className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-12 bg-gray-800 text-white p-3 rounded-full hover:bg-gray-600"
+                      >
+                        <FaArrowLeft size={20} />
+                      </button>
+                      <button
+                        onClick={() => sliderRef.current.slickNext()}
+                        className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-12 bg-gray-800 text-white p-3 rounded-full hover:bg-gray-600"
+                      >
+                        <FaArrowRight size={20} />
+                      </button>
+                    </div>
+                  )}
+
+{chatModal && selectedChatScheduleId && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-xl shadow-xl max-w-md w-full">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">Chat with Driver</h3>
+                <div className="h-64 overflow-y-auto mb-4 p-2 bg-gray-100 rounded-lg">
+                  {chatMessages[selectedChatScheduleId]?.length > 0 ? (
+                    chatMessages[selectedChatScheduleId].map((msg, index) => (
+                      <div
+                        key={index}
+                        className={`mb-2 ${
+                          msg.sender._id === data?.data?._id ? "text-right" : "text-left"
+                        }`}
+                      >
+                        <p className="inline-block p-2 rounded-lg bg-blue-100">{msg.content}</p>
+                        <p className="text-xs text-gray-500">{new Date(msg.timestamp).toLocaleTimeString()}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-600">No messages yet</p>
+                  )}
+                </div>
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    className="flex-1 p-2 border border-gray-300 rounded-lg"
+                    placeholder="Type a message..."
+                  />
+                  <button
+                    onClick={() => sendChatMessage(selectedChatScheduleId)}
+                    className="py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Send
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    setChatModal(false);
+                    setSelectedChatScheduleId(null);
+                    setChatInput("");
+                  }}
+                  className="mt-4 py-2 px-4 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )} 
+
+                  {/* Driver Details Modal */}
+                  {driverDetailsModal && selectedDriverSchedule && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full p-6 transform transition-all duration-300 scale-95 sm:scale-100">
+                        <div className="flex justify-between items-center mb-6">
+                          <h2 className="text-2xl font-bold text-gray-800">Driver Details</h2>
+                          <button
+                            onClick={() => setDriverDetailsModal(false)}
+                            className="text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                          >
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <img
+                              src={selectedDriverSchedule.driverResponse.driverProfileId.profilePicture}
+                              alt="Driver Profile"
+                              className="w-full h-40 object-cover rounded-lg"
+                            />
+                            <button
+                              onClick={() =>
+                                window.open(
+                                  selectedDriverSchedule.driverResponse.driverProfileId.profilePicture,
+                                  "_blank"
+                                )
+                              }
+                              className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors duration-200"
+                            >
+                              View
+                            </button>
+                          </div>
+                          <div className="space-y-2">
+                            <p>
+                              <strong>Driver:</strong> {selectedDriverSchedule.driverResponse.driverId.firstName}{" "}
+                              {selectedDriverSchedule.driverResponse.driverId.lastName}
+                            </p>
+                            <p>
+                              <strong>Email:</strong> {selectedDriverSchedule.driverResponse.driverId.email}
+                            </p>
+                            <p>
+                              <strong>Phone:</strong> {selectedDriverSchedule.driverResponse.driverProfileId.phoneNumber}
+                            </p>
+                            <p>
+                              <strong>Location:</strong>{" "}
+                              {selectedDriverSchedule.driverResponse.driverProfileId.location.state},{" "}
+                              {selectedDriverSchedule.driverResponse.driverProfileId.location.lga}
+                            </p>
+                            <p>
+                              <strong>Role:</strong> {selectedDriverSchedule.driverResponse.driverProfileId.role}
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <h3 className="font-semibold text-lg">Car Details</h3>
+                            <p>
+                              <strong>Car Picture:</strong>{" "}
+                              <img
+                                className="w-16 h-16 rounded-full border-4 border-customGreen shadow-lg object-cover transition-all duration-300 hover:scale-105 hover:shadow-xl hover:border-customGreen-dark"
+                                src={selectedDriverSchedule.driverResponse.driverProfileId.carPicture || "https://via.placeholder.com/150"}
+                                alt={`${selectedDriverSchedule.driverResponse.driverId?.firstName} ${selectedDriverSchedule.driverResponse.driverId?.lastName}`}
+                              />
+                              <button
+                                onClick={() =>
+                                  window.open(
+                                    selectedDriverSchedule.driverResponse.driverProfileId.carPicture,
+                                    "_blank"
+                                  )
+                                }
+                                className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors duration-200"
+                              >
+                                View
+                              </button>
+
+                            </p>
+                            <p>
+                              <strong>Car Color:</strong>{" "}
+                              {selectedDriverSchedule.driverResponse.driverProfileId.carDetails.color}
+                            </p>
+                            <p>
+                              <strong>Car Model:</strong>{" "}
+                              {selectedDriverSchedule.driverResponse.driverProfileId.carDetails.model}
+                            </p>
+                            <p>
+                              <strong>Car Product:</strong>{" "}
+                              {selectedDriverSchedule.driverResponse.driverProfileId.carDetails.product}
+                            </p>
+                            <p>
+                              <strong>Plate Number:</strong>{" "}
+                              {selectedDriverSchedule.driverResponse.driverProfileId.carDetails.plateNumber}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-6 flex justify-end">
+                          <button
+                            onClick={() => setDriverDetailsModal(false)}
+                            className="px-4 py-2 bg-gray-300 text-gray-800 font-semibold rounded-lg hover:bg-gray-400 transition-colors duration-200"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+
+{activeTab === "bookings" && (
+              <div className="bg-white bg-opacity-95 p-6 rounded-xl shadow-xl max-w-2xl mx-auto transform transition-all duration-300 hover:shadow-2xl">
+                <h3 className="text-2xl font-bold text-gray-800 mb-6">Bookings</h3>
+
+            
+                <div>
+                  <h4 className="text-xl font-semibold text-gray-800 mb-4">Your Bookings</h4>
+                  {airport.length === 0 ? (
+                    <p className="text-gray-600">you havnt made any bookings yet</p>
+                  ) : (
+                    <div className="space-y-4">
+                      <Slider
+                        ref={sliderRef} // Attach ref to slider
+                        dots={true}
+                        infinite={true}
+                        speed={500}
+                        slidesToShow={1}
+                        slidesToScroll={1}
+                        arrows={false} // Disable default arrows
+                        className="w-full"
+                        prevArrow={<button className="slick-prev bg-gray-800 text-white p-2 rounded-full" />}
+                        nextArrow={<button className="slick-next bg-gray-800 text-white p-2 rounded-full" />}
+                      >
+                        {airport.map((schedule) => (
+                          <div key={schedule._id} className="p-4 bg-gray-50 rounded-lg shadow-sm">
+                              <p>
+                              <strong>mode:</strong> {schedule.pickupOrdropoff}
+                            </p>
+                            {schedule.airportName && (
+                              <> 
+                                  <p>
+                               <strong>Airport name:</strong> {schedule.airportName}
+                             </p>
+                                 <p>
+                                 <strong>state:</strong> {schedule.state}
+                               </p>
+                              </>
+                           
+
+                            )
+
+                            }
+                            <p>
+                              <strong>Time:</strong> {schedule.time}
+                            </p>
+                            <p>
+                              <strong>Date:</strong> {schedule.date}
+                            </p>
+                            <p>
+                              <strong>Location:</strong> {schedule.state}, {schedule.lga}, {schedule.address}
+                            </p>
+    
+                         
                             <p>
                               <strong>Status: </strong>
                               <span

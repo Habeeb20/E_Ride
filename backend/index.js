@@ -11,6 +11,7 @@ import authRouter from "./routes/auth.Route.js";
 import profileRoute from "./routes/profile.Route.js";
 import ownACarRoute from "./routes/ownAcar.Route.js";
 import ScheduleRoute from "./routes/schedule.Route.js";
+import airportRoute from "./routes/airport.js";
 
 
 dotenv.config()
@@ -43,6 +44,7 @@ app.use("/api/auth", authRouter)
 app.use("/api/profile", profileRoute)
 app.use("/api/ownacar", ownACarRoute)
 app.use("/api/schedule", ScheduleRoute)
+app.use("/api/airport", airportRoute)
 
 const port= process.env.PORT || 2000
 

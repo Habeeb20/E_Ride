@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import im from "../../assets/pic.jpg";
+import Slider from "react-slick";
+import "slick-carousel/slick/slick.css";
+import "slick-carousel/slick/slick-theme.css";
 import { useNavigate } from "react-router-dom";
 import {
   FaBell,
@@ -28,8 +31,10 @@ import im1 from "../../assets/Rectangle 90 (1).png";
 import im2 from "../../assets/Rectangle 90 (2).png";
 import im3 from "../../assets/Rectangle 90.png";
 import axios from "axios";
+import { FaArrowLeft, FaArrowRight } from "react-icons/fa";
 
 const DriverDashboard = () => {
+  const sliderRef = useRef(null);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -49,7 +54,10 @@ const DriverDashboard = () => {
   const [selectedScheduleId, setSelectedScheduleId] = useState(null);
   const [negotiatedPriceInput, setNegotiatedPriceInput] = useState("");
   const [myAcceptedSchedule, setMyAcceptedSchedule] = useState([])
-
+  const [allAirports, setAllAirports] = useState({})
+  const [selectedAirports, setSelectedAirports] = useState(null)
+  const [myAcceptedAirport, setMyAcceptedAirport] = useState({})
+  const [selectedChatAirportId, setSelectedChatAirportId] = useState(null)
   const animationRef = useRef();
   const navigate = useNavigate();
 
@@ -156,32 +164,7 @@ const DriverDashboard = () => {
     }
   };
 
-  // const fetchAllSchedules = async () => {
-  //   const token = localStorage.getItem("token");
-  //   try {
-  //     const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/allschedules`, {
-  //       headers: { Authorization: `Bearer ${token}` },
-  //     });
-  //     if (response.data.status) {
-  //       setAllSchedules(response.data.schedules);
-  //     } else {
-  //       setAllSchedules([]);
-  //     }
-  //   } catch (error) {
-  //     console.error("Error fetching all schedules:", error);
-  //     setAllSchedules([]);
-  //     toast.error("Failed to fetch all schedules", { style: { background: "#F44336", color: "white" } });
-  //   }
-  // };
 
-  // useEffect(() => {
-  //   if (activeTab === "schedules") {
-  //     const isDriver = data?.data?.role === "driver";
-  //     if (isDriver) {
-  //       fetchAllSchedules();
-  //     }
-  //   }
-  // }, [activeTab, data]);
 
   const handleScheduleResponse = async (scheduleId, action, negotiatedPrice = null) => {
     const token = localStorage.getItem("token");
@@ -212,17 +195,48 @@ const DriverDashboard = () => {
   };
 
 
+
+  const handleAirportResponse = async (airportId, action, negotiatedPrice = null) => {
+    const token = localStorage.getItem("token");
+    try {
+      if (action === "negotiated" && negotiatedPrice) {
+        setSelectedAirports(airportId);
+        setNegotiatedPriceInput(negotiatedPrice);
+        setShowNegotiationModal(true);
+        return;
+      }
+
+      const payload = { status: action };
+      if (action === "negotiated") payload.negotiatedPrice = negotiatedPrice;
+
+      const response = await axios.post(
+        `${import.meta.env.VITE_BACKEND_URL}/api/airport/respondtoairportpickup/${airportId}`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (response.data.status) {
+        toast.success(`response sent ${action} successfully`, { style: { background: "#4CAF50", color: "white" } });
+        fetchAllAirportsPickups(); 
+      }
+    } catch (error) {
+      console.log(error)
+      const errorMessage = error.response?.data?.message || `Failed to ${action} schedule`;
+      toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
+    }
+  };
+
+
   useEffect(() => {
-    const fetchMyAccepedtSchedule = async() => {
+    const fetchMyAccepedtSchedule = async () => {
       try {
         const token = localStorage.getItem("token")
-        const response  = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/myAcceptedSchedule`, {
-          headers:{
+        const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/myAcceptedSchedule`, {
+          headers: {
             Authorization: `Beare ${token}`
           }
         })
         setMyAcceptedSchedule(response.data.schedules)
-        console.log("you accepted schedules!!",response.data.schedules)
+        console.log("you accepted schedules!!", response.data.schedules)
       } catch (error) {
         console.log(error)
       }
@@ -253,11 +267,11 @@ const DriverDashboard = () => {
   };
 
 
-    const [chatMessages, setChatMessages] = useState({});
+  const [chatMessages, setChatMessages] = useState({});
   const [chatInput, setChatInput] = useState("");
   const [selectedChatScheduleId, setSelectedChatScheduleId] = useState(null);
   const [filter, setFilter] = useState({ state: "", lga: "" });
-  
+
   // Fetch chat messages
   const fetchChatMessages = async (scheduleId) => {
     const token = localStorage.getItem("token");
@@ -273,7 +287,7 @@ const DriverDashboard = () => {
       toast.error("Failed to fetch chat messages");
     }
   };
-  
+
   // Send chat message
   const sendChatMessage = async (scheduleId) => {
     const token = localStorage.getItem("token");
@@ -295,7 +309,7 @@ const DriverDashboard = () => {
       toast.error("Failed to send message");
     }
   };
-  
+
   // Update fetchAllSchedules with filter
   const fetchAllSchedules = async () => {
     const token = localStorage.getItem("token");
@@ -315,7 +329,68 @@ const DriverDashboard = () => {
       toast.error("Failed to fetch all schedules");
     }
   };
-  
+
+  const fetchAllAirportsPickups = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/airport/allAirportPickups`, {
+        headers: { Authorization: `Bearer ${token}` },
+
+      });
+      if (response.data.status) {
+        setAllAirports(response.data.airport);
+        console.log("airport!!!", response.data.airport)
+      } else {
+        setAllAirports([]);
+      }
+    } catch (error) {
+      console.error("Error fetching all airports appointments:", error);
+      setAllSchedules([]);
+      toast.error("Failed to fetch all  airport appointments");
+    }
+  };
+
+
+
+  const fetchChatMessagesAirport = async (airportId) => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/airport/chat/${airportId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data.status) {
+        setChatMessages((prev) => ({ ...prev, [airportId]: response.data.chat.messages }));
+      }
+    } catch (error) {
+      console.error("Error fetching chat:", error);
+      toast.error("Failed to fetch chat messages");
+    }
+  };
+
+  // Send chat message
+  const sendChatMessageAirport = async (airportId) => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await axios.post(
+        `${import.meta.env.VITE_BACKEND_URL}/api/airport/chat/send`,
+        { airportId, content: chatInput },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (response.data.status) {
+        setChatMessages((prev) => ({
+          ...prev,
+          [airportId]: response.data.chat.messages,
+        }));
+        setChatInput("");
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast.error("Failed to send message");
+    }
+  };
+
+
+
   // Update useEffect to include filter changes
   useEffect(() => {
     if (activeTab === "schedules") {
@@ -324,8 +399,9 @@ const DriverDashboard = () => {
         fetchAllSchedules();
       }
     }
+    fetchAllAirportsPickups()
   }, [activeTab, data, filter]);
-  
+
 
   const profile = data?.data;
   const isDriver = profile?.role === "driver";
@@ -335,7 +411,7 @@ const DriverDashboard = () => {
     { id: "appointments", label: "Your appointments", icon: FaCar },
     { id: "city", label: "City to City", icon: FaRoute },
     { id: "freight", label: "Freight", icon: FaTruck },
-    { id: "safety", label: "Safety", icon: FaShieldAlt },
+    { id: "bookings", label: "bookings", icon: FaCalendar },
     { id: "rides", label: "Rides", icon: FaRoute },
     { id: "profile", label: "Profile", icon: FaUser },
     { id: "settings", label: "Settings", icon: FaCog },
@@ -370,9 +446,8 @@ const DriverDashboard = () => {
       ))}
 
       <div
-        className={`fixed inset-y-0 left-0 z-20 w-56 bg-activeColor text-white transform transition-transform duration-300 ease-in-out ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0 md:static md:w-1/6`}
+        className={`fixed inset-y-0 left-0 z-20 w-56 bg-activeColor text-white transform transition-transform duration-300 ease-in-out ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          } md:translate-x-0 md:static md:w-1/6`}
       >
         <div className="p-4 flex items-center justify-between md:justify-start">
           <h2 className="text-2xl font-bold tracking-wide">e-Ride</h2>
@@ -385,9 +460,8 @@ const DriverDashboard = () => {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center p-4 hover:bg-customColor transition-colors duration-200 ${
-                activeTab === item.id ? "bg-customPink shadow-inner" : ""
-              }`}
+              className={`w-full flex items-center p-4 hover:bg-customColor transition-colors duration-200 ${activeTab === item.id ? "bg-customPink shadow-inner" : ""
+                }`}
             >
               <item.icon size={20} className="mr-3" />
               <span className="text-sm font-medium">{item.label}</span>
@@ -564,41 +638,41 @@ const DriverDashboard = () => {
                   ) : (
                     <div className="space-y-4">
                       <div className="mb-6">
-      <div className="flex space-x-4">
-        <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-700">State</label>
-          <select
-            value={filter.state}
-            onChange={(e) => setFilter({ ...filter, state: e.target.value, lga: "" })}
-            className="w-full p-2 border border-gray-300 rounded-lg"
-          >
-            <option value="">All States</option>
-            {Object.keys(statesAndLgas).map((state) => (
-              <option key={state} value={state}>
-                {state}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-700">LGA</label>
-          <select
-            value={filter.lga}
-            onChange={(e) => setFilter({ ...filter, lga: e.target.value })}
-            className="w-full p-2 border border-gray-300 rounded-lg"
-            disabled={!filter.state}
-          >
-            <option value="">All LGAs</option>
-            {filter.state &&
-              statesAndLgas[filter.state].map((lga) => (
-                <option key={lga} value={lga}>
-                  {lga}
-                </option>
-              ))}
-          </select>
-        </div>
-      </div>
-    </div>
+                        <div className="flex space-x-4">
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium text-gray-700">State</label>
+                            <select
+                              value={filter.state}
+                              onChange={(e) => setFilter({ ...filter, state: e.target.value, lga: "" })}
+                              className="w-full p-2 border border-gray-300 rounded-lg"
+                            >
+                              <option value="">All States</option>
+                              {Object.keys(statesAndLgas).map((state) => (
+                                <option key={state} value={state}>
+                                  {state}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium text-gray-700">LGA</label>
+                            <select
+                              value={filter.lga}
+                              onChange={(e) => setFilter({ ...filter, lga: e.target.value })}
+                              className="w-full p-2 border border-gray-300 rounded-lg"
+                              disabled={!filter.state}
+                            >
+                              <option value="">All LGAs</option>
+                              {filter.state &&
+                                statesAndLgas[filter.state].map((lga) => (
+                                  <option key={lga} value={lga}>
+                                    {lga}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
                       {allSchedules.map((schedule) => (
                         <div key={schedule._id} className="p-4 bg-gray-50 rounded-lg shadow-sm">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -650,9 +724,8 @@ const DriverDashboard = () => {
                               <p>
                                 <strong>Status:</strong>{" "}
                                 <span
-                                  className={`capitalize ${
-                                    schedule.status === "accepted" ? "text-green-600" : "text-yellow-600"
-                                  }`}
+                                  className={`capitalize ${schedule.status === "accepted" ? "text-green-600" : "text-yellow-600"
+                                    }`}
                                 >
                                   {schedule.status}
                                 </span>
@@ -660,13 +733,12 @@ const DriverDashboard = () => {
                               <p>
                                 <strong>Driver Response:</strong>{" "}
                                 <span
-                                  className={`capitalize ${
-                                    schedule.driverResponse.status === "accepted"
+                                  className={`capitalize ${schedule.driverResponse.status === "accepted"
                                       ? "text-green-600"
                                       : schedule.driverResponse.status === "rejected"
-                                      ? "text-red-600"
-                                      : "text-gray-600"
-                                  }`}
+                                        ? "text-red-600"
+                                        : "text-gray-600"
+                                    }`}
                                 >
                                   {schedule.driverResponse.status}
                                 </span>
@@ -729,16 +801,16 @@ const DriverDashboard = () => {
                             </div>
                           )}
                           {(schedule.driverResponse.status === "accepted" || schedule.driverResponse.status === "negotiated") && (
-              <button
-                onClick={() => {
-                  setSelectedChatScheduleId(schedule._id);
-                  fetchChatMessages(schedule._id);
-                }}
-                className="mt-4 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Chat with Passenger
-              </button>
-            )}
+                            <button
+                              onClick={() => {
+                                setSelectedChatScheduleId(schedule._id);
+                                fetchChatMessages(schedule._id);
+                              }}
+                              className="mt-4 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            >
+                              Chat with Passenger
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -786,139 +858,329 @@ const DriverDashboard = () => {
             )}
 
 
-{activeTab === "appointments" && (
-  <div className="bg-white bg-opacity-95 p-6 rounded-xl shadow-xl max-w-2xl mx-auto transform transition-all duration-300 hover:shadow-2xl">
-    <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-      <FaCalendar className="mr-2 text-customGreen" /> My Appointments
-    </h3>
-    {myAcceptedSchedule && myAcceptedSchedule.length > 0 ? (
-      <div className="space-y-4">
-        {myAcceptedSchedule.map((schedule) => (
-          <div key={schedule._id} className="p-4 bg-gray-50 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
-                <img
-                                  className="w-16 h-16 rounded-full border-4 border-customGreen shadow-lg object-cover transition-all duration-300 hover:scale-105 hover:shadow-xl hover:border-customGreen-dark"
-                                  src={schedule.profileId?.profilePicture || "https://via.placeholder.com/150"}
-                                  alt={`${schedule.profileId?.firstName} ${schedule.profileId?.lastName}`}
-                                />
-                                <button
-                                  onClick={() =>
-                                    window.open(
-                                      schedule.profileId?.profilePicture || "https://via.placeholder.com/150",
-                                      "_blank"
-                                    )
-                                  }
-                                  className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors duration-200"
-                                >
-                                  View
-                                </button>
-             <p>
-              <strong>Full Name:</strong> {schedule.userId.firstName} {schedule.userId.lastName}
-            </p>
-            <p>
-              <strong>Email:</strong> {schedule.userId.email} 
-            </p>
-            <p>
-              <strong>phoneNumber:</strong> {schedule.profileId.phoneNumber} 
-            </p>
-            <p>
-              <strong>Time:</strong> {schedule.formattedTime}
-            </p>
-            <p>
-              <strong>Location:</strong> {schedule.state}, {schedule.lga}, {schedule.address}
-            </p>
-            <p>
-              <strong>Price Range:</strong> ₦{schedule.priceRange.min} - ₦{schedule.priceRange.max}
-            </p>
-            {schedule.driverResponse.status === "negotiated" && (
-              <p>
-                <strong>Negotiated Price:</strong> ₦{schedule.driverResponse.negotiatedPrice}
-              </p>
-            )}
-            <p>
-              <strong>Status:</strong>{" "}
-              <span
-                className={
-                  schedule.driverResponse.status === "accepted" ? "text-green-600" : "text-yellow-600"
-                }
-              >
-                {schedule.driverResponse.status}
-              </span>
-            </p>
-            <button
-              onClick={() => {
-                setSelectedChatScheduleId(schedule._id);
-                fetchChatMessages(schedule._id);
-              }}
-              className="mt-4 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Chat with Passenger
-            </button>
-          </div>
-        ))}
-      </div>
-    ) : (
-      <h4 className="text-gray-600 text-center">You have not accepted any schedule yet</h4>
-    )}
-
-{selectedChatScheduleId && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-xl shadow-xl max-w-md w-full">
-              <h3 className="text-xl font-bold text-gray-800 mb-4">Chat with Passenger</h3>
-              <div className="h-64 overflow-y-auto mb-4 p-2 bg-gray-100 rounded-lg">
-                {chatMessages[selectedChatScheduleId]?.length > 0 ? (
-                  chatMessages[selectedChatScheduleId].map((msg, index) => (
-                    <div
-                      key={index}
-                      className={`mb-2 ${
-                        msg.sender._id === data?.data?.driverProfileId 
-                          ? "text-right text-black font-bold"
-                          : "text-left text-gray-800 font-semibold"
-                      }`}
-                    >
-                      <p
-                        className={`inline-block p-2 rounded-lg ${
-                          msg.sender._id === data?.data?.driverProfileId ? "bg-customPink" : "bg-blue-100"
-                        }`}
-                      >
-                        {msg.content}
-                      </p>
-                      <p className="text-xs text-gray-500">{new Date(msg.timestamp).toLocaleTimeString()}</p>
-                    </div>
-                  ))
+            {activeTab === "appointments" && (
+              <div className="bg-white bg-opacity-95 p-6 rounded-xl shadow-xl max-w-2xl mx-auto transform transition-all duration-300 hover:shadow-2xl">
+                <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                  <FaCalendar className="mr-2 text-customGreen" /> My Appointments
+                </h3>
+                {myAcceptedSchedule && myAcceptedSchedule.length > 0 ? (
+                  <div className="space-y-4">
+                    {myAcceptedSchedule.map((schedule) => (
+                      <div key={schedule._id} className="p-4 bg-gray-50 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
+                        <img
+                          className="w-16 h-16 rounded-full border-4 border-customGreen shadow-lg object-cover transition-all duration-300 hover:scale-105 hover:shadow-xl hover:border-customGreen-dark"
+                          src={schedule.profileId?.profilePicture || "https://via.placeholder.com/150"}
+                          alt={`${schedule.profileId?.firstName} ${schedule.profileId?.lastName}`}
+                        />
+                        <button
+                          onClick={() =>
+                            window.open(
+                              schedule.profileId?.profilePicture || "https://via.placeholder.com/150",
+                              "_blank"
+                            )
+                          }
+                          className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors duration-200"
+                        >
+                          View
+                        </button>
+                        <p>
+                          <strong>Full Name:</strong> {schedule.userId.firstName} {schedule.userId.lastName}
+                        </p>
+                        <p>
+                          <strong>Email:</strong> {schedule.userId.email}
+                        </p>
+                        <p>
+                          <strong>phoneNumber:</strong> {schedule.profileId.phoneNumber}
+                        </p>
+                        <p>
+                          <strong>Time:</strong> {schedule.formattedTime}
+                        </p>
+                        <p>
+                          <strong>Location:</strong> {schedule.state}, {schedule.lga}, {schedule.address}
+                        </p>
+                        <p>
+                          <strong>Price Range:</strong> ₦{schedule.priceRange.min} - ₦{schedule.priceRange.max}
+                        </p>
+                        {schedule.driverResponse.status === "negotiated" && (
+                          <p>
+                            <strong>Negotiated Price:</strong> ₦{schedule.driverResponse.negotiatedPrice}
+                          </p>
+                        )}
+                        <p>
+                          <strong>Status:</strong>{" "}
+                          <span
+                            className={
+                              schedule.driverResponse.status === "accepted" ? "text-green-600" : "text-yellow-600"
+                            }
+                          >
+                            {schedule.driverResponse.status}
+                          </span>
+                        </p>
+                        <button
+                          onClick={() => {
+                            setSelectedChatScheduleId(schedule._id);
+                            fetchChatMessages(schedule._id);
+                          }}
+                          className="mt-4 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                          Chat with Passenger
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
-                  <p className="text-gray-600">No messages yet</p>
+                  <h4 className="text-gray-600 text-center">You have not accepted any schedule yet</h4>
+                )}
+
+                {selectedChatScheduleId && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-xl shadow-xl max-w-md w-full">
+                      <h3 className="text-xl font-bold text-gray-800 mb-4">Chat with Passenger</h3>
+                      <div className="h-64 overflow-y-auto mb-4 p-2 bg-gray-100 rounded-lg">
+                        {chatMessages[selectedChatScheduleId]?.length > 0 ? (
+                          chatMessages[selectedChatScheduleId].map((msg, index) => (
+                            <div
+                              key={index}
+                              className={`mb-2 ${msg.sender._id === data?.data?.driverProfileId
+                                  ? "text-right text-black font-bold"
+                                  : "text-left text-gray-800 font-semibold"
+                                }`}
+                            >
+                              <p
+                                className={`inline-block p-2 rounded-lg ${msg.sender._id === data?.data?.driverProfileId ? "bg-customPink" : "bg-blue-100"
+                                  }`}
+                              >
+                                {msg.content}
+                              </p>
+                              <p className="text-xs text-gray-500">{new Date(msg.timestamp).toLocaleTimeString()}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-gray-600">No messages yet</p>
+                        )}
+                      </div>
+                      <div className="flex space-x-2">
+                        <input
+                          type="text"
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          className="flex-1 p-2 border border-gray-300 rounded-lg"
+                          placeholder="Type a message..."
+                        />
+                        <button
+                          onClick={() => sendChatMessage(selectedChatScheduleId)}
+                          className="py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                          Send
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedChatScheduleId(null);
+                          setChatInput("");
+                        }}
+                        className="mt-4 py-2 px-4 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  className="flex-1 p-2 border border-gray-300 rounded-lg"
-                  placeholder="Type a message..."
-                />
-                <button
-                  onClick={() => sendChatMessage(selectedChatScheduleId)}
-                  className="py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Send
-                </button>
+            )}
+
+
+            {activeTab === "bookings" && (
+              <div className="bg-white bg-opacity-95 p-6 rounded-xl shadow-xl max-w-2xl mx-auto transform transition-all duration-300 hover:shadow-2xl">
+                <h3 className="text-2xl font-bold text-gray-800 mb-6">other bookings</h3>
+                {isDriver ? (
+                  allAirports.length === 0 ? (
+                    <p className="text-gray-600">No bookings found.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      <Slider
+                        ref={sliderRef} // Attach ref to slider
+                        dots={true}
+                        infinite={true}
+                        speed={500}
+                        slidesToShow={1}
+                        slidesToScroll={1}
+                        arrows={false} // Disable default arrows
+                        className="w-full"
+                        prevArrow={<button className="slick-prev bg-gray-800 text-white p-2 rounded-full" />}
+                        nextArrow={<button className="slick-next bg-gray-800 text-white p-2 rounded-full" />}
+                      >
+                        <div className="mb-6">
+
+                        </div>
+                        {allAirports.map((schedule) => (
+                          <div key={schedule._id} className="p-4 bg-gray-50 rounded-lg shadow-sm">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <div className="flex items-center space-x-4">
+                                  <img
+                                    className="w-16 h-16 rounded-full border-4 border-customGreen shadow-lg object-cover transition-all duration-300 hover:scale-105 hover:shadow-xl hover:border-customGreen-dark"
+                                    src={schedule.profileId?.profilePicture || "https://via.placeholder.com/150"}
+                                    alt={`${schedule.profileId?.firstName} ${schedule.profileId?.lastName}`}
+                                  />
+                                  <button
+                                    onClick={() =>
+                                      window.open(
+                                        schedule.profileId?.profilePicture || "https://via.placeholder.com/150",
+                                        "_blank"
+                                      )
+                                    }
+                                    className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-customPink transition-colors duration-200"
+                                  >
+                                    View
+                                  </button>
+                                </div>
+                                <p>
+                                  <strong>mode:</strong> <span className="font-bold text-black bg-customPink p-2 rounded-lg">{schedule.pickupOrdropoff}</span>
+                                </p>
+                                <p>
+                                  <strong>Name:</strong> {schedule.userId?.firstName} {schedule.userId?.lastName}
+                                </p>
+                                <p>
+                                  <strong>Email:</strong> {schedule.userId?.email}
+                                </p>
+                                <p>
+                                  <strong>Phone:</strong> {schedule.profileId?.phoneNumber}
+                                </p>
+                                <p>
+                                  <strong>Time:</strong> {schedule.time}
+                                </p>
+                                <p>
+                                  <strong>Date:</strong> {schedule.date}
+                                </p>
+                                <p>
+                                  <strong>Pick up/dropoff address:</strong> {schedule.homeAddress}
+                                </p>
+                                <p>
+                                  <strong>Location:</strong> {schedule.state},
+                                </p>
+
+                                {schedule.airportName && (
+                                  <p>
+                                    <strong>Airport:</strong> {schedule.airportName}
+                                  </p>
+                                )}
+                                <p>
+                                  <strong>Status:</strong>{" "}
+                                  <span
+                                    className={`capitalize ${schedule.status === "accepted" ? "text-green-600" : "text-yellow-600"
+                                      }`}
+                                  >
+                                    {schedule.status}
+                                  </span>
+                                </p>
+                                <p>
+                                  <strong>Driver Response:</strong>{" "}
+                                  <span
+                                    className={`capitalize ${schedule.driverResponse.status === "accepted"
+                                        ? "text-green-600"
+                                        : schedule.driverResponse.status === "rejected"
+                                          ? "text-red-600"
+                                          : "text-gray-600"
+                                      }`}
+                                  >
+                                    {schedule.driverResponse.status}
+                                  </span>
+                                </p>
+                                {schedule.driverResponse.status === "negotiated" && (
+                                  <p>
+                                    <strong>Negotiated Price:</strong> ₦{schedule.driverResponse.negotiatedPrice}
+                                  </p>
+                                )}
+                                {schedule.driverResponse.driverId && (
+                                  <div className="mt-2 p-2 bg-gray-100 rounded-lg">
+                                    <p>status: <span className={schedule.driverResponse.status === "rejected" ? "text-red-600" : "text-green-600"}>{schedule.driverResponse.status}</span></p>
+                                    <p>
+                                      <strong> Driver's Name:</strong> {schedule.driverResponse.driverId.firstName}{" "}
+                                      {schedule.driverResponse.driverId.lastName}
+                                    </p>
+                                    <p>
+                                      <strong>Email:</strong> {schedule.driverResponse.driverId.email}
+                                    </p>
+                                    <p>
+                                      <strong>Phone:</strong> {schedule.driverResponse.driverProfileId.phoneNumber}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {isDriver && schedule.status === "pending" && (
+                              <div className="mt-4 flex flex-col sm:flex-row sm:space-x-4 space-y-4 sm:space-y-0">
+                                <button
+                                  onClick={() => handleAirportResponse(schedule._id, "accepted")}
+                                  className="py-2 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+                                >
+                                  Accept
+                                </button>
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="number"
+                                    placeholder="Negotiate Price (NGN)"
+                                    value={negotiationPrice[schedule._id] || ""}
+                                    onChange={(e) =>
+                                      setNegotiationPrice({ ...negotiationPrice, [schedule._id]: e.target.value })
+                                    }
+                                    className="w-32 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-customGreen focus:border-transparent"
+                                  />
+                                  <button
+                                    onClick={() =>
+                                      handleAirportResponse(schedule._id, "negotiated", negotiationPrice[schedule._id])
+                                    }
+                                    className="py-2 px-4 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors duration-200"
+                                  >
+                                    Negotiate
+                                  </button>
+                                </div>
+                                <button
+                                  onClick={() => handleAirportResponse(schedule._id, "rejected")}
+                                  className="py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            )}
+                            {(schedule.driverResponse.status === "accepted" || schedule.driverResponse.status === "negotiated") && (
+                              <button
+                                onClick={() => {
+                                  setSelectedChatAirportId(schedule._id);
+                                  fetchChatMessagesAirport(schedule._id);
+                                }}
+                                className="mt-4 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                              >
+                                Chat with Passenger
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </Slider>
+                      <button
+                        onClick={() => sliderRef.current.slickPrev()}
+                        className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-12 bg-gray-800 text-white p-3 rounded-full hover:bg-gray-600"
+                      >
+                        <FaArrowLeft size={20} />
+                      </button>
+                      <button
+                        onClick={() => sliderRef.current.slickNext()}
+                        className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-12 bg-gray-800 text-white p-3 rounded-full hover:bg-gray-600"
+                      >
+                        <FaArrowRight size={20} />
+                      </button>
+                    </div>
+
+                  )
+                ) : (
+                  <p className="text-gray-600">
+                    Only drivers can view and respond to schedules.
+                  </p>
+                )}
               </div>
-              <button
-                onClick={() => {
-                  setSelectedChatScheduleId(null);
-                  setChatInput("");
-                }}
-                className="mt-4 py-2 px-4 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    )}
-    
+            )}
+
 
 
 
