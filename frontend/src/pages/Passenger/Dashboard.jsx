@@ -35,6 +35,7 @@ import im3 from "../../assets/Rectangle 90.png";
 import axios from "axios";
 import { statesAndLgas } from "../../stateAndLga";
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa"; // Import arrow icons
+import Fare from "../Fare";
 
 
 // Inside your Dashboard component:
@@ -586,7 +587,7 @@ const Dashboard = () => {
   useEffect(() => {
 
     fetchMyAirportsPickups()
-  })
+  }, [])
 
 
   
@@ -860,9 +861,9 @@ const Dashboard = () => {
             )}
 
             {activeTab === "freight" && (
-              <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-lg max-w-lg mx-auto">
+              <div className="bg-gray-200  bg-opacity-90 p-6 rounded-lg shadow-lg  mx-auto">
                 <h3 className="text-xl font-semibold mb-4">Want to transfer your goods ?</h3>
-                <p className="text-gray-600">No ride history available yet.</p>
+                <p className="text-gray-600"><Fare /></p>
               </div>
             )}
 

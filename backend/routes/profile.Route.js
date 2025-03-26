@@ -246,4 +246,6 @@ profileRoute.put("/update", async (req, res) => {
     }
   });
 
+  
+
   export default profileRoute

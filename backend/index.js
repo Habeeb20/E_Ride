@@ -13,6 +13,7 @@ import ownACarRoute from "./routes/ownAcar.Route.js";
 import ScheduleRoute from "./routes/schedule.Route.js";
 import airportRoute from "./routes/airport.js";
 import rideRoute from "./routes/fare.Route.js";
+import router from "./routes/delivery.Route.js";
 
 
 dotenv.config()
@@ -47,7 +48,7 @@ app.use("/api/ownacar", ownACarRoute)
 app.use("/api/schedule", ScheduleRoute)  
 app.use("/api/airport", airportRoute)
 app.use("/api/fare", rideRoute)
-
+app.use("/api/delivery", router)
 const port= process.env.PORT || 2000
 
 app.listen(port, () => {

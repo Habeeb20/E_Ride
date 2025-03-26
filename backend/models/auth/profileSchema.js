@@ -82,6 +82,12 @@ const profileSchema = new mongoose.Schema(
             return this.role === "driver"
         }
     },
+
+    available:{
+      type:Boolean,
+      default: true
+
+    },
     location: {
       state: { type: String, required: true },
       lga: { type: String, required: true },
