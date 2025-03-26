@@ -12,6 +12,7 @@ import { Toaster } from "sonner";
 import ProfileForm from "./pages/Auth/ProfileForm";
 import FaceAuth from "./pages/Auth/FaceAuth";
 import DriverDashboard from "./pages/Driver/DriverDashboard";
+import Fare from "./pages/Fare";
 
 // Custom PrivateRoute to check token in localStorage
 const PrivateRoute = ({ children }) => {
@@ -56,6 +57,7 @@ const App = () => {
         <Route path="/plogin" element={<Login />} />
         <Route path="/verifyemail" element={<EmailVerifyRoute />} />
         <Route path="/profileform" element={<ProfileForm  />} /> 
+        <Route path="/fare" element={<Fare />} />
 
     
         <Route
