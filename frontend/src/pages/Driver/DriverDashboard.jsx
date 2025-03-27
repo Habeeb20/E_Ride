@@ -410,7 +410,7 @@ const DriverDashboard = () => {
     { id: "bookRide", label: "Book a Ride", icon: FaCar },
     { id: "appointments", label: "Your appointments", icon: FaCar },
     { id: "city", label: "City to City", icon: FaRoute },
-    { id: "freight", label: "Freight", icon: FaTruck },
+    { id: "freight", label: "Freight Deliveries", icon: FaTruck },
     { id: "bookings", label: "bookings", icon: FaCalendar },
     { id: "rides", label: "Rides", icon: FaRoute },
     { id: "profile", label: "Profile", icon: FaUser },

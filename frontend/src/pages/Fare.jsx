@@ -401,6 +401,28 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // import { useState, useEffect } from 'react';
 // import axios from 'axios';
 // import Autocomplete from 'react-google-autocomplete';
@@ -436,6 +458,7 @@
 //   const [deliveryId, setDeliveryId] = useState(null);
 //   const [rating, setRating] = useState(0);
 //   const [review, setReview] = useState('');
+//   const [isCreatingDelivery, setIsCreatingDelivery] = useState(false);
 //   const [passenger, setPassenger] = useState(null);
 //   const [data, setData] = useState(null);
 //   const [loading, setLoading] = useState(false);
@@ -563,16 +586,25 @@
 //     }
 
 //     try {
+//       console.log('Sending request to calculate fare with:', { pickupAddress, destinationAddress, rideOption });
 //       const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/calculate-fare`, {
 //         pickupAddress,
 //         destinationAddress,
 //       });
+//       console.log('Calculate fare response:', response.data);
+      
 //       let { distance, price } = response.data;
 //       setDistance(distance);
 
 //       // Adjust price based on ride option
-//       if (rideOption === 'premium') price *= 1.5;
-//       if (rideOption === 'shared') price *= 0.7;
+//       if (rideOption === 'premium') {
+//         price *= 1.5;
+//         console.log('Price adjusted for premium:', price);
+//       }
+//       if (rideOption === 'shared') {
+//         price *= 0.7;
+//         console.log('Price adjusted for shared:', price);
+//       }
 //       setFare(price);
 
 //       // Simulate ETA (in a real app, calculate this using Directions API duration)
@@ -580,10 +612,13 @@
 
 //       setShowMap(true);
 //     } catch (error) {
-//         toast.error("error calculating fares", {
-//             style:{backgroundColor: "red", color:"white"}
-//         })
+//       toast.error("error calculating fares", {
+//         style: { backgroundColor: "red", color: "white" }
+//       });
 //       console.error('Error calculating fare:', error.response?.data || error);
+//       // Set default values to ensure the section is visible
+//       setDistance(0);
+//       setFare(0);
 //     }
 //   };
 
@@ -605,8 +640,26 @@
 //   };
 
 //   const createDelivery = async () => {
+//     const token = localStorage.getItem('token');
+//     if (!token) {
+//       console.log('No token found in localStorage');
+//       setError('Please log in to access the dashboard');
+//       toast.error('Please log in to access the dashboard', {
+//         style: { background: '#F44336', color: 'white' },
+//       });
+//       navigate('/plogin');
+//       setLoading(false);
+//       return;
+//     }
+
+//     if (isCreatingDelivery) {
+//       console.log('Delivery creation already in progress');
+//       return;
+//     }
+
+//     setIsCreatingDelivery(true);
 //     try {
-//       const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/create`, {
+//       console.log('Sending create delivery request with payload:', {
 //         passengerId,
 //         pickupAddress,
 //         destinationAddress,
@@ -618,22 +671,45 @@
 //         paymentMethod,
 //       });
 
+//       const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/create`, {
+//         passengerId,
+//         pickupAddress,
+//         destinationAddress,
+//         packageDescription,
+//         packagePicture: packagePictureUrl,
+//         distance,
+//         price: fare,
+//         rideOption,
+//         paymentMethod,
+//       }, {
+//         headers: { Authorization: `Bearer ${token}` }
+//       });
+
 //       const delivery = response.data;
 //       setDeliveryId(delivery._id);
 
 //       // Fetch driver details from the Profile schema
-//       const driverResponse = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/passengers/${delivery.driver}`);
+//       const driverResponse = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/driver/${delivery.driver}`);
 //       const driver = driverResponse.data;
 //       setDriverDetails({
-//         name: driver.name,
-//         car: `${driver.carDetails.model} ${driver.carDetails.product} (${driver.carDetails.year})`,
+//         name: driver.firstName,
+//         car: `${driver.carDetails.model} ${driver.carDetails.product} (${driver.carDetails.year}) (${driver.carPicturer})`,
 //         licensePlate: driver.carDetails.plateNumber,
 //       });
 
 //       setRideStarted(true);
-//       axios.put(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/${delivery._id}/status`, { status: 'accepted' });
+//       await axios.put(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/${delivery._id}/status`, { status: 'accepted' });
+//       toast.success('Delivery created successfully', {
+//         style: { background: '#4CAF50', color: 'white' },
+//       });
 //     } catch (error) {
 //       console.error('Error creating delivery:', error.response?.data || error);
+//       const errorMessage = error.response?.data?.error || 'Failed to create delivery';
+//       toast.error(errorMessage, {
+//         style: { background: '#F44336', color: 'white' },
+//       });
+//     } finally {
+//       setIsCreatingDelivery(false);
 //     }
 //   };
 
@@ -870,14 +946,11 @@
 //             CONTINUE
 //           </button>
 
-//                {/* Display Distance and Price */}
-//                {distance && fare && (
-//             <div className="text-gray-800 mt-4">
-//               <p>Distance: {distance} km</p>
-//               <p>Estimated Price: <span className='font-bold text-green-800'>₦{fare}</span></p>
-//             </div>
-//           )}
-
+//           {/* Display Distance and Price */}
+//           <div className="text-gray-800 mt-4">
+//             <p>Distance: {distance !== null ? `${distance} km` : 'Not calculated'}</p>
+//             <p>Estimated Price: <span className='font-bold text-green-800'>{fare !== null ? `₦${fare}` : 'Not calculated'}</span></p>
+//           </div>
 
 //           {/* Start Delivery Button */}
 //           {distance && fare && !rideStarted && (
@@ -889,7 +962,6 @@
 //             </button>
 //           )}
 
-     
 //           {/* Driver Details & ETA */}
 //           {driverDetails && eta && rideStarted && (
 //             <div className="text-gray-800 border-t pt-4 mt-4">
@@ -1031,33 +1103,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import Autocomplete from 'react-google-autocomplete';
@@ -1065,6 +1110,7 @@ import { FaArrowLeft } from 'react-icons/fa';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
+import { FaSun, FaMoon } from 'react-icons/fa'; // Icons for the toggle button
 
 function Fare() {
   const [pickupAddress, setPickupAddress] = useState('');
@@ -1093,6 +1139,7 @@ function Fare() {
   const [deliveryId, setDeliveryId] = useState(null);
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
+  const [isCreatingDelivery, setIsCreatingDelivery] = useState(false);
   const [passenger, setPassenger] = useState(null);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1100,8 +1147,14 @@ function Fare() {
   const navigate = useNavigate();
   const [showNotification, setShowNotification] = useState(false);
   const [passengerId, setPassengerId] = useState('');
+  const [theme, setTheme] = useState('light'); 
   const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const embedApiKey = import.meta.env.VITE_EMBED_API_KEY;
+
+  // Toggle theme function
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
+  };
 
   useEffect(() => {
     const fetchMyProfile = async () => {
@@ -1274,8 +1327,26 @@ function Fare() {
   };
 
   const createDelivery = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.log('No token found in localStorage');
+      setError('Please log in to access the dashboard');
+      toast.error('Please log in to access the dashboard', {
+        style: { background: '#F44336', color: 'white' },
+      });
+      navigate('/plogin');
+      setLoading(false);
+      return;
+    }
+
+    if (isCreatingDelivery) {
+      console.log('Delivery creation already in progress');
+      return;
+    }
+
+    setIsCreatingDelivery(true);
     try {
-      const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/create`, {
+      console.log('Sending create delivery request with payload:', {
         passengerId,
         pickupAddress,
         destinationAddress,
@@ -1287,22 +1358,45 @@ function Fare() {
         paymentMethod,
       });
 
+      const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/create`, {
+        passengerId,
+        pickupAddress,
+        destinationAddress,
+        packageDescription,
+        packagePicture: packagePictureUrl,
+        distance,
+        price: fare,
+        rideOption,
+        paymentMethod,
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
       const delivery = response.data;
       setDeliveryId(delivery._id);
 
       // Fetch driver details from the Profile schema
-      const driverResponse = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/passengers/${delivery.driver}`);
+      const driverResponse = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/driver/${delivery.driver}`);
       const driver = driverResponse.data;
       setDriverDetails({
-        name: driver.name,
-        car: `${driver.carDetails.model} ${driver.carDetails.product} (${driver.carDetails.year})`,
+        name: driver.firstName,
+        car: `${driver.carDetails.model} ${driver.carDetails.product} (${driver.carDetails.year}) (${driver.carPicturer})`,
         licensePlate: driver.carDetails.plateNumber,
       });
 
       setRideStarted(true);
-      axios.put(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/${delivery._id}/status`, { status: 'accepted' });
+      await axios.put(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/${delivery._id}/status`, { status: 'accepted' });
+      toast.success('Delivery created successfully', {
+        style: { background: '#4CAF50', color: 'white' },
+      });
     } catch (error) {
       console.error('Error creating delivery:', error.response?.data || error);
+      const errorMessage = error.response?.data?.error || 'Failed to create delivery';
+      toast.error(errorMessage, {
+        style: { background: '#F44336', color: 'white' },
+      });
+    } finally {
+      setIsCreatingDelivery(false);
     }
   };
 
@@ -1339,15 +1433,15 @@ function Fare() {
   const mapUrl = `https://www.google.com/maps/embed/v1/directions?key=${embedApiKey}&origin=${encodeURIComponent(pickupAddress)}&destination=${encodeURIComponent(destinationAddress)}&mode=driving`;
 
   return (
-    <div className="h-full bg-gray-100 flex flex-col">
+    <div className={`h-full flex flex-col ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-800'}`}>
       {/* Header */}
-      <header className="flex items-center justify-between p-4 bg-white shadow-md">
-        {/* <div className="flex items-center space-x-2">
-          <button className="text-gray-600 hover:text-gray-800" onClick={() => navigate(-1)}>
-            <FaArrowLeft size={20} />
+      <header className={`flex items-center justify-between p-4 shadow-md ${theme === 'light' ? 'bg-white' : 'bg-gray-700'}`}>
+        <div className="flex items-center space-x-2">
+          {/* Theme Toggle Button */}
+          <button onClick={toggleTheme} className="text-gray-600 hover:text-gray-800">
+            {theme === 'light' ? <FaMoon size={20} className={theme === 'light' ? 'text-gray-600' : 'text-white'} /> : <FaSun size={20} className={theme === 'light' ? 'text-gray-600' : 'text-white'} />}
           </button>
-      
-        </div> */}
+        </div>
         <button onClick={() => setShowProfile(!showProfile)}>
           <div className="w-8 h-8 bg-gray-300 rounded-full overflow-hidden">
             {passenger?.profilePicture && (
@@ -1360,51 +1454,51 @@ function Fare() {
       {/* Profile and Ride History Modal */}
       {showProfile && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-11/12 max-w-md max-h-[80vh] overflow-y-auto">
-            <button onClick={() => setShowProfile(false)} className="text-green-600 mb-4">
+          <div className={`rounded-lg p-6 w-11/12 max-w-md max-h-[80vh] overflow-y-auto ${theme === 'light' ? 'bg-white' : 'bg-gray-700'}`}>
+            <button onClick={() => setShowProfile(false)} className={theme === 'light' ? 'text-green-600 mb-4' : 'text-green-400 mb-4'}>
               Close
             </button>
-            <h2 className="text-xl font-bold mb-4">Profile</h2>
-            <p>Name: {passenger?.name || 'James'}</p>
-            <p>Email: {passenger?.userEmail || 'james@example.com'}</p>
-            <p>Phone: {passenger?.phoneNumber}</p>
-            <p>Location: {passenger?.location.state}, {passenger?.location.lga}</p>
-            {passenger?.question && <p>Status: {passenger.question}</p>}
+            <h2 className={`text-xl font-bold mb-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Profile</h2>
+            <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Name: {passenger?.name || 'James'}</p>
+            <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Email: {passenger?.userEmail || 'james@example.com'}</p>
+            <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Phone: {passenger?.phoneNumber}</p>
+            <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Location: {passenger?.location.state}, {passenger?.location.lga}</p>
+            {passenger?.question && <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Status: {passenger.question}</p>}
             {passenger?.schoolIdUrl && (
-              <p>
-                School ID: <a href={passenger.schoolIdUrl} target="_blank" rel="noopener noreferrer">View</a>
+              <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>
+                School ID: <a href={passenger.schoolIdUrl} target="_blank" rel="noopener noreferrer" className={theme === 'light' ? 'text-blue-600' : 'text-blue-400'}>View</a>
               </p>
             )}
-            <h3 className="text-lg font-semibold mt-4">Delivery History</h3>
+            <h3 className={`text-lg font-semibold mt-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Delivery History</h3>
             {rideHistory.length > 0 ? (
               <ul className="space-y-2">
                 {rideHistory.map((ride, index) => (
-                  <li key={index} className="border p-2 rounded-lg">
-                    <p>From: {ride.pickupAddress}</p>
-                    <p>To: {ride.destinationAddress}</p>
-                    <p>Package: {ride.packageDescription}</p>
-                    <p>Distance: {ride.distance} km</p>
-                    <p>Price: ₦{ride.price}</p>
-                    <p>Date: {new Date(ride.createdAt).toLocaleString()}</p>
+                  <li key={index} className={`border p-2 rounded-lg ${theme === 'light' ? 'border-gray-200' : 'border-gray-600'}`}>
+                    <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>From: {ride.pickupAddress}</p>
+                    <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>To: {ride.destinationAddress}</p>
+                    <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Package: {ride.packageDescription}</p>
+                    <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Distance: {ride.distance} km</p>
+                    <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Price: ₦{ride.price}</p>
+                    <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Date: {new Date(ride.createdAt).toLocaleString()}</p>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p>No deliveries yet.</p>
+              <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>No deliveries yet.</p>
             )}
           </div>
         </div>
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col lg:flex-row p-4 gap-4  ">
+      <div className={`flex-1 flex flex-col lg:flex-row p-4 gap-4 ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-800'}`}>
         {/* Left Side: Form */}
-        <div className="lg:w-[45%] w-full bg-white rounded-lg shadow-md p-4 overflow-y-auto max-h-[calc(100vh-120px)]">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">Send a Package</h3>
+        <div className={`lg:w-[45%] w-full rounded-lg shadow-md p-4 overflow-y-auto max-h-[calc(100vh-120px)] ${theme === 'light' ? 'bg-white' : 'bg-gray-700'}`}>
+          <h3 className={`text-lg font-bold mb-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Send a Package</h3>
 
           {/* Pickup Input */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Address</label>
+            <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Pickup Address</label>
             <Autocomplete
               apiKey={googleMapsApiKey}
               onPlaceSelected={(place) => {
@@ -1428,14 +1522,14 @@ function Fare() {
                 console.log('Pickup input changed:', e.target.value);
                 setPickupAddress(e.target.value);
               }}
-              className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
               placeholder="Enter pickup location"
             />
           </div>
 
           {/* Destination Input */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Destination Address</label>
+            <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Destination Address</label>
             <Autocomplete
               apiKey={googleMapsApiKey}
               onPlaceSelected={(place) => {
@@ -1459,18 +1553,18 @@ function Fare() {
                 console.log('Destination input changed:', e.target.value);
                 setDestinationAddress(e.target.value);
               }}
-              className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
               placeholder="Enter destination"
             />
           </div>
 
           {/* Package Description */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Package Description</label>
+            <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Package Description</label>
             <textarea
               value={packageDescription}
               onChange={(e) => setPackageDescription(e.target.value)}
-              className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
               placeholder="Describe the package (e.g., size, weight, contents)"
               rows="3"
             />
@@ -1478,12 +1572,12 @@ function Fare() {
 
           {/* Package Picture */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Package Picture (Optional)</label>
+            <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Package Picture (Optional)</label>
             <input
               type="file"
               accept="image/*"
               onChange={handlePackagePictureUpload}
-              className="w-full p-2 border border-gray-200 rounded-lg"
+              className={`w-full p-2 border rounded-lg ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
             />
             {packagePictureUrl && (
               <img src={packagePictureUrl} alt="Package" className="mt-2 w-24 h-24 object-cover rounded-lg" />
@@ -1493,10 +1587,10 @@ function Fare() {
           {/* Nearby Drivers */}
           {nearbyDrivers.length > 0 && !rideStarted && (
             <div className="mb-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-1">Nearby Drivers</h4>
+              <h4 className={`text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Nearby Drivers</h4>
               <ul className="space-y-1">
                 {nearbyDrivers.map((driver, index) => (
-                  <li key={index} className="text-sm text-gray-600">
+                  <li key={index} className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
                     {driver.name} - {driver.distance}
                   </li>
                 ))}
@@ -1506,11 +1600,11 @@ function Fare() {
 
           {/* Ride Options */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Option</label>
+            <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Delivery Option</label>
             <select
               value={rideOption}
               onChange={(e) => setRideOption(e.target.value)}
-              className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
             >
               <option value="economy">Economy</option>
               <option value="premium">Premium</option>
@@ -1520,11 +1614,11 @@ function Fare() {
 
           {/* Payment Method */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+            <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Payment Method</label>
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
             >
               <option value="cash">Cash</option>
               <option value="card">Card</option>
@@ -1540,9 +1634,9 @@ function Fare() {
           </button>
 
           {/* Display Distance and Price */}
-          <div className="text-gray-800 mt-4">
+          <div className={`mt-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
             <p>Distance: {distance !== null ? `${distance} km` : 'Not calculated'}</p>
-            <p>Estimated Price: <span className='font-bold text-green-800'>{fare !== null ? `₦${fare}` : 'Not calculated'}</span></p>
+            <p>Estimated Price: <span className={`font-bold ${theme === 'light' ? 'text-green-800' : 'text-green-400'}`}>{fare !== null ? `₦${fare}` : 'Not calculated'}</span></p>
           </div>
 
           {/* Start Delivery Button */}
@@ -1557,7 +1651,7 @@ function Fare() {
 
           {/* Driver Details & ETA */}
           {driverDetails && eta && rideStarted && (
-            <div className="text-gray-800 border-t pt-4 mt-4">
+            <div className={`border-t pt-4 mt-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
               <h4 className="text-base font-semibold">Driver Details</h4>
               <p>Name: {driverDetails.name}</p>
               <p>Car: {driverDetails.car}</p>
@@ -1569,8 +1663,8 @@ function Fare() {
           {/* Ride Status and Progress */}
           {rideStarted && (
             <div className="mt-4">
-              <h4 className="text-base font-semibold">Delivery Status: {rideStatus}</h4>
-              <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+              <h4 className={`text-base font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Delivery Status: {rideStatus}</h4>
+              <div className={`w-full rounded-full h-2 mt-2 ${theme === 'light' ? 'bg-gray-200' : 'bg-gray-600'}`}>
                 <div
                   className="bg-green-600 h-2 rounded-full"
                   style={{ width: `${rideProgress}%` }}
@@ -1582,10 +1676,10 @@ function Fare() {
           {/* Chat with Driver */}
           {rideStarted && (
             <div className="mt-4">
-              <h4 className="text-base font-semibold">Chat with Driver</h4>
-              <div className="border p-2 rounded-lg h-24 overflow-y-auto">
+              <h4 className={`text-base font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Chat with Driver</h4>
+              <div className={`border p-2 rounded-lg h-24 overflow-y-auto ${theme === 'light' ? 'border-gray-200' : 'border-gray-600'}`}>
                 {chatMessages.map((msg, index) => (
-                  <p key={index} className={msg.sender === 'passenger' ? 'text-right text-blue-600' : 'text-left text-gray-600'}>
+                  <p key={index} className={msg.sender === 'passenger' ? 'text-right text-blue-600' : `text-left ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
                     {msg.sender === 'passenger' ? 'You' : 'Driver'}: {msg.text}
                   </p>
                 ))}
@@ -1595,7 +1689,7 @@ function Fare() {
                   type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  className="flex-1 p-2 border rounded-lg"
+                  className={`flex-1 p-2 border rounded-lg ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
                   placeholder="Type a message..."
                 />
                 <button
@@ -1623,7 +1717,7 @@ function Fare() {
             </div>
           )}
           {paymentCompleted && (
-            <div className="text-green-600 mt-2">
+            <div className={`mt-2 ${theme === 'light' ? 'text-green-600' : 'text-green-400'}`}>
               <p>Payment completed successfully!</p>
             </div>
           )}
@@ -1631,22 +1725,22 @@ function Fare() {
           {/* Rate and Review Driver */}
           {paymentCompleted && (
             <div className="mt-4">
-              <h4 className="text-base font-semibold">Rate and Review Driver</h4>
+              <h4 className={`text-base font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Rate and Review Driver</h4>
               <div className="flex items-center space-x-2">
-                <label className="text-sm font-medium text-gray-700">Rating (1-5):</label>
+                <label className={`text-sm font-medium ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Rating (1-5):</label>
                 <input
                   type="number"
                   min="1"
                   max="5"
                   value={rating}
                   onChange={(e) => setRating(Number(e.target.value))}
-                  className="w-16 p-2 border rounded-lg"
+                  className={`w-16 p-2 border rounded-lg ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
                 />
               </div>
               <textarea
                 value={review}
                 onChange={(e) => setReview(e.target.value)}
-                className="w-full p-2 border border-gray-200 rounded-lg mt-2"
+                className={`w-full p-2 border rounded-lg mt-2 ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
                 placeholder="Leave a review (optional)"
                 rows="3"
               />
@@ -1674,8 +1768,8 @@ function Fare() {
               onError={(error) => console.error('Error loading iframe map:', error)}
             />
           ) : (
-            <div className="h-full bg-gray-200 rounded-lg flex items-center justify-center">
-              <p className="text-gray-600">Select locations to view the map</p>
+            <div className={`h-full rounded-lg flex items-center justify-center ${theme === 'light' ? 'bg-gray-200' : 'bg-gray-600'}`}>
+              <p className={theme === 'light' ? 'text-gray-600' : 'text-gray-300'}>Select locations to view the map</p>
             </div>
           )}
         </div>
@@ -1688,10 +1782,6 @@ function Fare() {
 }
 
 export default Fare;
-
-
-
-
 
 
 

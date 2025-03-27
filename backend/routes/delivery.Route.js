@@ -59,16 +59,55 @@ router.post('/calculate-fare', async (req, res) => {
   });
   
   // Create a delivery
-  router.post('/create', async (req, res) => {
-    const { passengerId, pickupAddress, destinationAddress, packageDescription, packagePicture, distance, price, rideOption, paymentMethod } = req.body;
+  router.post('/create', verifyToken, async (req, res) => {
+    const passengerId = req.user.id;
+    const { pickupAddress, destinationAddress, packageDescription, packagePicture, distance, price, rideOption, paymentMethod } = req.body;
   
     try {
-      // Find an available driver
-      const driver = await Profile.findOne({ role: 'driver', available: true });
+      // Validate required fields
+      if (!pickupAddress || !destinationAddress || !packageDescription || !distance || !price || !rideOption || !paymentMethod) {
+        console.log('Missing required fields:', { pickupAddress, destinationAddress, packageDescription, distance, price, rideOption, paymentMethod });
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+  
+      // Verify the passenger exists
+      const passenger = await Profile.findOne({ userId: passengerId });
+      if (!passenger || passenger.role !== 'passenger') {
+        console.log('Passenger not found or invalid role:', passengerId, passenger?.role);
+        return res.status(400).json({ error: 'Invalid passenger ID' });
+      }
+  
+      // Log the state of drivers before the query
+      const driversBefore = await Profile.find({ role: 'driver' });
+      console.log('Drivers before findOneAndUpdate:', driversBefore);
+  
+      // Log the collection name being queried
+      console.log('Profile collection name:', Profile.collection.collectionName);
+  
+      // Debug the query
+      const query = Profile.findOneAndUpdate(
+        { role: 'driver', available: true },
+        { $set: { available: false } },
+        { new: true }
+      );
+      console.log('Mongoose query:', query.getQuery());
+      console.log('Mongoose update:', query.getUpdate());
+      console.log('Mongoose options:', query.getOptions());
+  
+      // Execute the query
+      const driver = await query.exec();
+  
       if (!driver) {
+        // Log the current state of drivers to debug
+        const driversAfter = await Profile.find({ role: 'driver' });
+        console.log('No available drivers found. Drivers after findOneAndUpdate:', driversAfter);
         return res.status(400).json({ error: 'No available drivers' });
       }
   
+      // Log the selected driver
+      console.log('Selected driver:', driver);
+  
+      // Create the delivery
       const delivery = new Delivery({
         passenger: passengerId,
         driver: driver._id,
@@ -84,16 +123,56 @@ router.post('/calculate-fare', async (req, res) => {
   
       await delivery.save();
   
-      // Update driver availability
-      driver.available = false;
-      await driver.save();
-  
+      console.log('Delivery created successfully:', delivery);
       res.status(201).json(delivery);
     } catch (error) {
-      res.status(500).json({ error: 'Error creating delivery' });
+      console.error('Error creating delivery:', error.message);
+      res.status(500).json({ error: 'Error creating delivery', details: error.message });
     }
   });
+
+
+  router.get('/driver/:id', verifyToken, async (req, res) => {
+    try {
+      const driverId = req.params.id;
   
+      // Find the driver by ID in the Profile collection
+      const driver = await Profile.findById(driverId);
+      if (!driver) {
+        console.log(`Driver not found for ID: ${driverId}`);
+        return res.status(404).json({ error: 'Driver not found' });
+      }
+  
+      // Ensure the profile is a driver
+      if (driver.role !== 'driver') {
+        console.log(`Profile with ID ${driverId} is not a driver. Role: ${driver.role}`);
+        return res.status(400).json({ error: 'Profile is not a driver' });
+      }
+  
+      // Prepare the response with the fields needed by the frontend
+      const driverDetails = {
+        firstName: driver.firstName || driver.name || 'Unknown', 
+        lastName : driver.lastName,
+        phoneNumber: driver.phoneNumber,
+        carDetails: {
+          model: driver.carDetails?.model || 'Unknown',
+          product: driver.carDetails?.product || 'Unknown',
+          year: driver.carDetails?.year || 0,
+          plateNumber: driver.carDetails?.plateNumber || 'Unknown',
+        },
+        carPicture: driver.carPicture || '', // Include carPicture if available
+      };
+  
+      console.log(`Driver details fetched for ID ${driverId}:`, driverDetails);
+      res.status(200).json(driverDetails);
+    } catch (error) {
+      console.error(`Error fetching driver details for ID ${req.params.id}:`, error.message);
+      res.status(500).json({ error: 'Error fetching driver details', details: error.message });
+    }
+  });
+
+
+
   // Update delivery status
   router.put('/:id/status', async (req, res) => {
     const { id } = req.params;

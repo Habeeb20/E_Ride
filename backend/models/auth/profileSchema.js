@@ -84,7 +84,7 @@ const profileSchema = new mongoose.Schema(
     },
 
     available:{
-      type:Boolean,
+      type: Boolean,
       default: true
 
     },
