@@ -39,11 +39,14 @@ router.post('/calculate-fare', async (req, res) => {
         const baseFare = 500;
         const ratePerKm = 100;
         const fare = baseFare + distanceInKm * ratePerKm;
-    
+
+
+        console.log("results!!",    distanceInKm.toFixed(2),
+          Math.round(fare), )
         return res.status(200).json({
           status: true,
           distance: distanceInKm.toFixed(2),
-          fare: Math.round(fare),
+          price: Math.round(fare),
         });
       } catch (error) {
         console.error('Error calculating fare:', error.response?.data || error.message);
