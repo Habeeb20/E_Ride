@@ -166,7 +166,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import axios from "axios";
 import Navbar from "../../component/Navbar";
-import im from "../../assets/Board Cover.jpg"; // Picture of a car
+import im from "../../assets/Board Cover.jpg";
 
 const Login = () => {
   const [email, setEmail] = useState("");

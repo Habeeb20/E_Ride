@@ -36,6 +36,7 @@ import axios from "axios";
 import { statesAndLgas } from "../../stateAndLga";
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa"; // Import arrow icons
 import Fare from "../Fare";
+import Ride from "../Ride";
 
 
 // Inside your Dashboard component:
@@ -51,7 +52,7 @@ const Dashboard = () => {
     { x: window.innerWidth - 50, y: window.innerHeight - 50, targetX: window.innerWidth / 2, targetY: window.innerHeight / 2 }, // Bottom-right
   ]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("profile");
+  const [activeTab, setActiveTab] = useState("bookRide");
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState({});
   const [showNotification, setShowNotification] = useState(false);
@@ -936,8 +937,10 @@ const Dashboard = () => {
             )}
 
             {activeTab === "bookRide" && (
-              <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-lg max-w-lg mx-auto">
-                <h3 className="text-xl font-semibold mb-4">Want to book a ride</h3>
+              <div className="">
+             
+                  <Ride />
+             
               </div>
             )}
 
