@@ -288,15 +288,16 @@ ScheduleRoute.get("/allschedules", verifyToken, async (req, res) => {
     };
 
     // Add state and lga to filter if provided
-    if (state) filter.state = state;
-    if (lga) filter.lga = lga;
+    // if (state) filter.state = state;
+    // if (lga) filter.lga = lga;
 
     // Fetch schedules with the filter
-    const schedules = await Schedule.find(filter)
+    const schedules = await Schedule.find()
       .populate("userId", "firstName lastName email")
       .populate("profileId", "profilePicture location.state phoneNumber")
       .populate("driverResponse.driverId", "firstName lastName email phoneNumber");
 
+      console.log(schedules)
     return res.status(200).json({
       status: true,
       message: "All available schedules",

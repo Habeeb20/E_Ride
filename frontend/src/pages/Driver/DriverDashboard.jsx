@@ -32,6 +32,7 @@ import im2 from "../../assets/Rectangle 90 (2).png";
 import im3 from "../../assets/Rectangle 90.png";
 import axios from "axios";
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa";
+import DriverFare from "./DriverFare";
 
 const DriverDashboard = () => {
   const sliderRef = useRef(null);
@@ -68,6 +69,85 @@ const DriverDashboard = () => {
   const handleFaceAuth = () => {
     navigate("/face-auth");
   };
+const token = localStorage.getItem("token")
+
+
+  
+    const [location, setLocation] = useState({ latitude: null, longitude: null, name: null });
+  
+  
+    useEffect(() => {
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const { latitude, longitude } = position.coords;
+  
+                    // Fetch location name using Nominatim API
+                    try {
+                        const response = await fetch(
+                            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+                        );
+                        const data = await response.json();
+                        const locationName = data.display_name || 'Unknown location';
+  
+                        // Update state with coordinates and name
+                        setLocation({ latitude, longitude, name: locationName });
+  
+                        // Send location to backend
+                        await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/auth/save-location`, {
+                            method: 'POST',
+                            body: JSON.stringify({ latitude, longitude, userId: token }),
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                    } catch (error) {
+                        console.error('Error fetching location name:', error);
+                        setLocation({ latitude, longitude, name: 'Error fetching location' });
+                    }
+                },
+                (error) => {
+                    console.error("Location access denied:", error.message);
+                    setLocation({ latitude: null, longitude: null, name: 'Location access denied' });
+                }
+            );
+        } else {
+            setLocation({ latitude: null, longitude: null, name: 'Geolocation not supported' });
+        }
+    }, []);
+  
+    
+  
+  
+  
+  
+      useEffect(() => {
+       
+        fetch(`${import.meta.VITE_BACKEND_URL}/api/auth/get-location/${token}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.latitude && data.longitude) {
+                    setLocation({ latitude: data.latitude, longitude: data.longitude });
+                }
+            })
+            .catch(err => console.error('Error fetching location:', err));
+    
+        // Then try to update with current location
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    setLocation({ latitude, longitude });
+    
+                    fetch(`${import.meta.env.VITE_BACKEND_URL}/api/auth/save-location`, {
+                        method: 'POST',
+                        body: JSON.stringify({ latitude, longitude, userId: token }),
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                },
+                (error) => console.error("Location access denied:", error.message)
+            );
+        }
+    }, []);
+  
 
   useEffect(() => {
     const fetchMyProfile = async () => {
@@ -489,6 +569,11 @@ const DriverDashboard = () => {
                 <h2 className="text-xl font-bold">Welcome!</h2>
               )}
             </div>
+            {location.name ? (
+                <p>Your Location: <span className="text-customPink  rounded-lg">{location.name}</span></p>
+            ) : (
+                <p>Fetching location...</p>
+            )}
             <div className="flex items-center space-x-4">
               <button onClick={handleFaceAuth}>Face-Auth</button>
               <button onClick={handleLogout} className="font-semibold">
@@ -1179,6 +1264,11 @@ const DriverDashboard = () => {
                   </p>
                 )}
               </div>
+            )}
+
+            {activeTab === "freight" && (
+              <DriverFare />
+
             )}
 
 

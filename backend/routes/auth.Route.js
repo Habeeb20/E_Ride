@@ -54,7 +54,7 @@ cloudinary.config({
           <body style="margin: 0; padding: 0; font-family: 'Arial', sans-serif; background-color: #f5f5f5; color: #333;">
             <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);">
               <tr>
-                <td style="padding: 20px; text-align: center; background-color: #BDCE22FF; color: white; border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <td style="padding: 20px; text-align: center; background-color: customPink; color: white; border-top-left-radius: 12px; border-top-right-radius: 12px;">
                   <h1 style="font-size: 28px; margin: 0; font-weight: bold; font-family: 'Helvetica', sans-serif;">E_Ride</h1>
                 </td>
               </tr>
@@ -68,7 +68,7 @@ cloudinary.config({
                     Thank you for signing up with E_Ride! To complete your registration and secure your account, please verify your email address by entering the following 6-digit verification code:
                   </p>
                   <div style="text-align: center; margin: 30px 0; background-color: #f0f0f0; padding: 20px; border-radius: 8px;">
-                    <span style="display: inline-block; font-size: 32px; font-weight: bold; color: #BDCE22FF; letter-spacing: 6px; font-family: 'Helvetica', sans-serif;">
+                    <span style="display: inline-block; font-size: 32px; font-weight: bold; color: customPink; letter-spacing: 6px; font-family: 'Helvetica', sans-serif;">
                       ${otp}
                     </span>
                   </div>
@@ -82,7 +82,7 @@ cloudinary.config({
                     <a href="http://localhost:5173/verifyemail?email=${encodeURIComponent(
                       email
                     )}" 
-                       style="display: inline-block; padding: 12px 30px; background-color:  #BDCE22FF; color: white; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 8px; font-family: 'Helvetica', sans-serif; transition: background-color 0.3s;">
+                       style="display: inline-block; padding: 12px 30px; background-color: customPink; color: white; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 8px; font-family: 'Helvetica', sans-serif; transition: background-color 0.3s;">
                       Verify Now
                     </a>
                   </div>
@@ -345,5 +345,46 @@ authRouter.get("/dashboard", verifyToken, async(req, res) => {
       });
     }
 })
+
+
+
+authRouter.post('/save-location', async (req, res) => {
+  const { latitude, longitude, userId } = req.body;
+
+  try {
+
+      const user = await User.findOneAndUpdate(
+          { userId },
+          { 
+              location: { 
+                  latitude, 
+                  longitude, 
+                  lastUpdated: new Date() 
+              } 
+          },
+          { upsert: true, new: true } 
+      );
+      res.status(200).json({ message: 'Location saved', user });
+  } catch (error) {
+      console.error('Error saving location:', error);
+      res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+authRouter.get('/get-location/:userId', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+      const user = await User.findOne({ userId });
+      if (!user || !user.location) {
+          return res.status(404).json({ message: 'Location not found' });
+      }
+      res.status(200).json(user.location);
+  } catch (error) {
+      console.error('Error fetching location:', error);
+      res.status(500).json({ message: 'Server error' });
+  }
+});
 
 export default authRouter

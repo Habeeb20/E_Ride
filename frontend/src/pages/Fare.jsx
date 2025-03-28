@@ -1379,7 +1379,7 @@ function Fare() {
       const driverResponse = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/driver/${delivery.driver}`);
       const driver = driverResponse.data;
       setDriverDetails({
-        name: driver.firstName,
+        name: driver.firstName, 
         car: `${driver.carDetails.model} ${driver.carDetails.product} (${driver.carDetails.year}) (${driver.carPicturer})`,
         licensePlate: driver.carDetails.plateNumber,
       });

@@ -8,9 +8,9 @@ export const theme = {
     colors: {
       'e-ride-purple': "rgb(78, 78, 74)",
 
-      customPink: " #BDCE22FF",
-      customGreen: " #545C0CFF",
-      activeColor: "rgb(78, 78, 74)"
+      customPink: " #22CE4DFF",
+      customGreen: " #373B0BFF",
+      activeColor: "#323327FF"
     },
   },
 };

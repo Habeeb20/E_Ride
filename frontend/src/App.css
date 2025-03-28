@@ -1,42 +1,29 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+/* Animation tailored for a car image */
+.animate-car-cruise {
+  animation: carCruise 18s infinite ease-in-out;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+@keyframes carCruise {
+  0% {
+    transform: translateX(10%) rotate(0deg); /* Start slightly off-screen */
   }
-  to {
-    transform: rotate(360deg);
+  25% {
+    transform: translateX(-5%) rotate(-1deg); /* Slight tilt for realism */
+  }
+  50% {
+    transform: translateX(-20%) rotate(0deg); /* Move left, straighten */
+  }
+  75% {
+    transform: translateX(-5%) rotate(1deg); /* Tilt the other way */
+  }
+  100% {
+    transform: translateX(10%) rotate(0deg); /* Return to start */
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
+/* Ensure the car image fits and looks natural */
+.animate-car-cruise {
+  background-size: contain; /* Use 'contain' to show the full car */
+  background-repeat: no-repeat; /* No tiling, just one car */
+  background-position: center; /* Center the car */
 }
