@@ -871,3 +871,432 @@ function Ride() {
 }
 
 export default Ride;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// import { useState, useEffect } from 'react';
+// import axios from 'axios';
+// import Autocomplete from 'react-google-autocomplete';
+// import { FaInfoCircle } from 'react-icons/fa';
+// import { ToastContainer, toast } from 'react-toastify';
+// import 'react-toastify/dist/ReactToastify.css';
+// import { useNavigate } from 'react-router-dom';
+// import { FaSun, FaMoon, FaCar } from 'react-icons/fa';
+// import io from 'socket.io-client';
+// import im from "../../assets/im1";
+
+// const socket = io('http://localhost:5000');
+
+// function Fare() {
+//   const [pickupAddress, setPickupAddress] = useState('');
+//   const [pickupLatLng, setPickupLatLng] = useState(null);
+//   const [destinationAddress, setDestinationAddress] = useState('');
+//   const [destinationLatLng, setDestinationLatLng] = useState(null);
+//   const [packageDescription, setPackageDescription] = useState('');
+//   const [packagePictureUrl, setPackagePictureUrl] = useState('');
+//   const [distance, setDistance] = useState(null);
+//   const [fare, setFare] = useState(null);
+//   const [offeredFare, setOfferedFare] = useState('');
+//   const [showMap, setShowMap] = useState(false);
+//   const [rideStarted, setRideStarted] = useState(false);
+//   const [rideProgress, setRideProgress] = useState(0);
+//   const [rideStatus, setRideStatus] = useState('');
+//   const [driverDetails, setDriverDetails] = useState(null);
+//   const [eta, setEta] = useState(null);
+//   const [nearbyDrivers, setNearbyDrivers] = useState([]);
+//   const [rideOption, setRideOption] = useState('economy');
+//   const [paymentMethod, setPaymentMethod] = useState('cash');
+//   const [paymentCompleted, setPaymentCompleted] = useState(false);
+//   const [showProfile, setShowProfile] = useState(false);
+//   const [rideHistory, setRideHistory] = useState([]);
+//   const [chatMessages, setChatMessages] = useState([]);
+//   const [newMessage, setNewMessage] = useState('');
+//   const [deliveryId, setDeliveryId] = useState(null);
+//   const [rating, setRating] = useState(0);
+//   const [review, setReview] = useState('');
+//   const [passenger, setPassenger] = useState(null);
+//   const [loading, setLoading] = useState(false);
+//   const [error, setError] = useState('');
+//   const [currentLocation, setCurrentLocation] = useState(null);
+//   const [showFeatures, setShowFeatures] = useState({ economy: false, premium: false, shared: false });
+//   const [driverOffers, setDriverOffers] = useState([]);
+//   const [driverLocation, setDriverLocation] = useState(null);
+//   const navigate = useNavigate();
+//   const [theme, setTheme] = useState('light');
+//   const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+//   const embedApiKey = import.meta.env.VITE_EMBED_API_KEY;
+
+//   const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
+
+//   useEffect(() => {
+//     if ("geolocation" in navigator) {
+//       navigator.geolocation.getCurrentPosition(
+//         async (position) => {
+//           const { latitude, longitude } = position.coords;
+//           setPickupLatLng({ lat: latitude, lng: longitude });
+//           setCurrentLocation({ lat: latitude, lng: longitude });
+//           try {
+//             const response = await fetch(
+//               `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+//               { headers: { 'User-Agent': 'e_RideProject/1.0' } }
+//             );
+//             const data = await response.json();
+//             setPickupAddress(data.display_name || 'Current Location');
+//           } catch (error) {
+//             setPickupAddress('Current Location');
+//           }
+//         },
+//         (error) => setPickupAddress('Unable to fetch location')
+//       );
+//     }
+
+//     socket.on("driverResponse", (ride) => {
+//       setDriverOffers(ride.driverOffers);
+//     });
+
+//     socket.on("passengerResponse", (ride) => {
+//       if (ride.status === "accepted") {
+//         setRideStatus("accepted");
+//         setDriverDetails({ name: ride.driver.firstName, rating: ride.driver.rating, rideCount: ride.driver.rideCount });
+//       }
+//     });
+
+//     socket.on("newMessage", (message) => {
+//       setChatMessages((prev) => [...prev, message]);
+//     });
+
+//     socket.on("locationUpdate", ({ lat, lng, eta }) => {
+//       setDriverLocation({ lat, lng });
+//       setEta(eta);
+//     });
+
+//     socket.on("rideStarted", () => setRideStatus("in_progress"));
+//     socket.on("rideCompleted", () => setRideStatus("completed"));
+
+//     return () => socket.off();
+//   }, []);
+
+//   useEffect(() => {
+//     const fetchMyProfile = async () => {
+//       const token = localStorage.getItem('token');
+//       if (!token) {
+//         toast.error('Please log in to access the dashboard', { style: { background: '#F44336', color: 'white' } });
+//         navigate('/plogin');
+//         return;
+//       }
+//       try {
+//         const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/auth/dashboard`, {
+//           headers: { Authorization: `Bearer ${token}` },
+//         });
+//         setPassenger(response.data);
+//         setDeliveryId(response.data._id);
+//       } catch (error) {
+//         toast.error(error.response?.data?.message || 'Error fetching profile', { style: { background: '#F44336', color: 'white' } });
+//         if (error.response?.status === 401) navigate('/plogin');
+//       }
+//     };
+//     fetchMyProfile();
+//   }, [navigate]);
+
+//   const calculateDistanceAndFare = async () => {
+//     if (!pickupAddress || !destinationAddress || !packageDescription) {
+//       alert('Please enter pickup address, destination address, and package description');
+//       return;
+//     }
+//     try {
+//       const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/rides/create`, {
+//         passengerId: passenger._id,
+//         pickupAddress,
+//         destinationAddress,
+//         pickupLatLng,
+//         destinationLatLng,
+//         distance: 10, // Replace with actual calculation
+//         price: offeredFare || 0,
+//         rideOption,
+//       });
+//       setDeliveryId(response.data._id);
+//       setDistance(response.data.distance);
+//       setFare(response.data.price);
+//       setShowMap(true);
+//       socket.emit("joinRide", response.data._id);
+//     } catch (error) {
+//       toast.error("Error creating ride", { style: { backgroundColor: "red", color: "white" } });
+//     }
+//   };
+
+//   const handleDriverResponse = async (driverId, action) => {
+//     try {
+//       const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/rides/${deliveryId}/accept-driver`, { driverId, action });
+//       if (action === "accept") {
+//         setRideStatus("accepted");
+//         setDriverDetails(response.data.driver);
+//       }
+//     } catch (error) {
+//       toast.error("Error responding to driver", { style: { background: '#F44336', color: 'white' } });
+//     }
+//   };
+
+//   const startRide = async () => {
+//     await axios.put(`${import.meta.env.VITE_BACKEND_URL}/api/rides/${deliveryId}/start`);
+//   };
+
+//   const completeRide = async () => {
+//     await axios.put(`${import.meta.env.VITE_BACKEND_URL}/api/rides/${deliveryId}/complete`);
+//   };
+
+//   const submitRatingAndReview = async () => {
+//     await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/rides/${deliveryId}/rate`, { rating });
+//     toast.success('Rating submitted');
+//   };
+
+//   const sendChatMessage = () => {
+//     if (!newMessage.trim()) return;
+//     socket.emit("sendMessage", { rideId: deliveryId, senderId: passenger._id, text: newMessage });
+//     setNewMessage('');
+//   };
+
+//   const mapUrl = showMap && rideStatus !== "completed"
+//     ? `https://www.google.com/maps/embed/v1/directions?key=${embedApiKey}&origin=${encodeURIComponent(pickupAddress)}&destination=${encodeURIComponent(destinationAddress)}&mode=driving`
+//     : `https://www.google.com/maps/embed/v1/view?key=${embedApiKey}&center=${currentLocation?.lat},${currentLocation?.lng}&zoom=15`;
+
+//   return (
+//     <div className={`h-full flex flex-col ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-800'}`}>
+//       <header className={`flex items-center justify-between p-4 shadow-md ${theme === 'light' ? 'bg-white' : 'bg-gray-700'}`}>
+//         <button onClick={toggleTheme}>
+//           {theme === 'light' ? <FaMoon size={20} /> : <FaSun size={20} />}
+//         </button>
+//         <button onClick={() => setShowProfile(!showProfile)}>
+//           <div className="w-8 h-8 bg-gray-300 rounded-full overflow-hidden">
+//             {passenger?.profilePicture && <img src={passenger.profilePicture} alt="Profile" />}
+//           </div>
+//         </button>
+//       </header>
+
+//       <div className={`flex-1 flex flex-col lg:flex-row p-4 gap-4 ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-800'}`}>
+//         <div className={`lg:w-[45%] w-full rounded-lg shadow-md p-4 overflow-y-auto max-h-[calc(100vh-120px)] ${theme === 'light' ? 'bg-white' : 'bg-gray-700'}`}>
+//           <h3 className={`text-lg font-bold mb-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Send a Package</h3>
+
+//           <div className="mb-4">
+//             <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Pickup Address</label>
+//             <Autocomplete
+//               apiKey={googleMapsApiKey}
+//               onPlaceSelected={(place) => {
+//                 setPickupAddress(place.formatted_address);
+//                 setPickupLatLng({ lat: place.geometry.location.lat(), lng: place.geometry.location.lng() });
+//               }}
+//               options={{ types: ['geocode'], componentRestrictions: { country: 'ng' } }}
+//               value={pickupAddress}
+//               onChange={(e) => setPickupAddress(e.target.value)}
+//               className={`w-full p-2 border rounded-lg ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
+//             />
+//           </div>
+
+//           <div className="mb-4">
+//             <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Destination Address</label>
+//             <Autocomplete
+//               apiKey={googleMapsApiKey}
+//               onPlaceSelected={(place) => {
+//                 setDestinationAddress(place.formatted_address);
+//                 setDestinationLatLng({ lat: place.geometry.location.lat(), lng: place.geometry.location.lng() });
+//               }}
+//               options={{ types: ['geocode'], componentRestrictions: { country: 'ng' } }}
+//               value={destinationAddress}
+//               onChange={(e) => setDestinationAddress(e.target.value)}
+//               className={`w-full p-2 border rounded-lg ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
+//             />
+//           </div>
+
+//           <div className="mb-4">
+//             <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Package Description</label>
+//             <textarea
+//               value={packageDescription}
+//               onChange={(e) => setPackageDescription(e.target.value)}
+//               className={`w-full p-2 border rounded-lg ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
+//               rows="3"
+//             />
+//           </div>
+
+//           <div className="mb-4">
+//             <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Your Offered Fare (₦)</label>
+//             <input
+//               type="number"
+//               value={offeredFare}
+//               onChange={(e) => setOfferedFare(e.target.value)}
+//               className={`w-full p-2 border rounded-lg ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
+//             />
+//           </div>
+
+//           <div className="mb-4">
+//             <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Delivery Option</label>
+//             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+//               <div className={`p-4 border rounded-lg cursor-pointer ${rideOption === 'economy' ? 'border-green-500' : 'border-gray-200'}`} onClick={() => setRideOption('economy')}>
+//                 <img src={im} alt="Economy" className="w-full h-24 object-cover rounded-lg mb-2" />
+//                 <p className={`text-center font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Economy</p>
+//               </div>
+//               <div className={`p-4 border rounded-lg cursor-pointer ${rideOption === 'premium' ? 'border-green-500' : 'border-gray-200'}`} onClick={() => setRideOption('premium')}>
+//                 <FaCar size={96} className={`w-full h-24 mx-auto mb-2 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`} />
+//                 <p className={`text-center font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Premium</p>
+//               </div>
+//               <div className={`p-4 border rounded-lg cursor-pointer ${rideOption === 'shared' ? 'border-green-500' : 'border-gray-200'}`} onClick={() => setRideOption('shared')}>
+//                 <FaCar size={96} className={`w-full h-24 mx-auto mb-2 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`} />
+//                 <p className={`text-center font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Shared</p>
+//               </div>
+//             </div>
+//           </div>
+
+//           <button onClick={calculateDistanceAndFare} className="w-full py-2 bg-green-600 text-white rounded-lg">CONTINUE</button>
+
+//           {driverOffers.length > 0 && rideStatus === "pending" && (
+//             <div className="mt-4">
+//               <h4 className={`text-base font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Driver Offers</h4>
+//               {driverOffers.map((offer) => (
+//                 <div key={offer.driver._id} className="border p-2 mt-2">
+//                   <p>Name: {offer.driver.firstName}</p>
+//                   <p>Rating: {offer.driver.rating || 0}</p>
+//                   <p>Rides: {offer.driver.rideCount || 0}</p>
+//                   <p>Offered Price: ₦{offer.offeredPrice}</p>
+//                   <button onClick={() => handleDriverResponse(offer.driver._id, "accept")} className="bg-green-600 text-white px-2 py-1 mr-2">Accept</button>
+//                   <button onClick={() => handleDriverResponse(offer.driver._id, "decline")} className="bg-red-600 text-white px-2 py-1">Decline</button>
+//                 </div>
+//               ))}
+//             </div>
+//           )}
+
+//           {rideStatus === "accepted" && (
+//             <div className="mt-4">
+//               <h4 className={`text-base font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Driver Details</h4>
+//               <p>Name: {driverDetails.name}</p>
+//               <p>Rating: {driverDetails.rating}</p>
+//               <p>Rides: {driverDetails.rideCount}</p>
+//               {rideStatus === "in_progress" && <p>ETA: {eta} mins</p>}
+//             </div>
+//           )}
+
+//           {rideStatus === "in_progress" && (
+//             <button onClick={completeRide} className="w-full py-2 bg-blue-600 text-white rounded-lg mt-2">Complete Ride</button>
+//           )}
+
+//           {rideStatus === "completed" && (
+//             <div className="mt-4">
+//               <input
+//                 type="number"
+//                 min="1"
+//                 max="5"
+//                 value={rating}
+//                 onChange={(e) => setRating(Number(e.target.value))}
+//                 className={`w-16 p-2 border rounded-lg ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
+//               />
+//               <button onClick={submitRatingAndReview} className="w-full py-2 bg-green-600 text-white rounded-lg mt-2">Submit Rating</button>
+//             </div>
+//           )}
+
+//           {rideStatus !== "" && (
+//             <div className="mt-4">
+//               <h4 className={`text-base font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Chat</h4>
+//               <div className={`border p-2 rounded-lg h-24 overflow-y-auto ${theme === 'light' ? 'border-gray-200' : 'border-gray-600'}`}>
+//                 {chatMessages.map((msg, index) => (
+//                   <p key={index} className={msg.sender === passenger._id ? 'text-right text-blue-600' : 'text-left text-gray-600'}>
+//                     {msg.sender === passenger._id ? 'You' : 'Driver'}: {msg.text}
+//                   </p>
+//                 ))}
+//               </div>
+//               <div className="flex mt-2">
+//                 <input
+//                   type="text"
+//                   value={newMessage}
+//                   onChange={(e) => setNewMessage(e.target.value)}
+//                   className={`flex-1 p-2 border rounded-lg ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
+//                 />
+//                 <button onClick={sendChatMessage} className="ml-2 px-4 py-2 bg-green-600 text-white rounded-lg">Send</button>
+//               </div>
+//             </div>
+//           )}
+
+//           <div className={`mt-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
+//             <p>Distance: {distance !== null ? `${distance} km` : 'Not calculated'}</p>
+//             <p>Price: <span className={`font-bold ${theme === 'light' ? 'text-green-800' : 'text-green-400'}`}>{fare !== null ? `₦${fare}` : 'Not calculated'}</span></p>
+//           </div>
+//         </div>
+
+//         <div className="lg:w-[55%] w-full h-96 lg:h-auto">
+//           {currentLocation ? (
+//             <iframe
+//               width="100%"
+//               height="100%"
+//               style={{ border: 0, borderRadius: '8px', boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)' }}
+//               loading="lazy"
+//               allowFullScreen
+//               src={mapUrl}
+//             />
+//           ) : (
+//             <div className={`h-full rounded-lg flex items-center justify-center ${theme === 'light' ? 'bg-gray-200' : 'bg-gray-600'}`}>
+//               <p className={theme === 'light' ? 'text-gray-600' : 'text-gray-300'}>Fetching your location...</p>
+//             </div>
+//           )}
+//         </div>
+//       </div>
+
+//       <ToastContainer position="top-right" autoClose={3000} />
+//     </div>
+//   );
+// }
+
+// export default Fare;

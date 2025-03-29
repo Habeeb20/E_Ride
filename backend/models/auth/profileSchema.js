@@ -88,6 +88,8 @@ const profileSchema = new mongoose.Schema(
       default: true
 
     },
+    rating: { type: Number, default: 0 }, // Average rating
+  rideCount: { type: Number, default: 0 },
     location: {
       state: { type: String, required: true },
       lga: { type: String, required: true },
