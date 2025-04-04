@@ -17,7 +17,8 @@ import ScheduleRoute from "./routes/schedule.Route.js";
 import airportRoute from "./routes/airport.js";
 import rideRoute from "./routes/fare.Route.js";
 import deliveryRouter from "./routes/delivery.Route.js";
-import ridesRouterWithIO from "./routes/ride.Route.js"; // Note: Renamed to indicate it’s a factory function
+import ridesRouterWithIO from "./routes/eride.Route.js";
+
 
 dotenv.config();
 
@@ -58,7 +59,7 @@ app.use("/api/schedule", ScheduleRoute);
 app.use("/api/airport", airportRoute);
 app.use("/api/fare", rideRoute);
 app.use("/api/delivery", deliveryRouter);
-app.use("/api/ride", ridesRouterWithIO(io)); // Pass io to ridesRouter
+app.use("/api/rides", ridesRouterWithIO(io)); 
 
 // Socket.IO setup
 io.on("connection", (socket) => {
@@ -79,3 +80,37 @@ const port = process.env.PORT || 2000;
 server.listen(port, () => {
   console.log(`Your app is working on port ${port}`);
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

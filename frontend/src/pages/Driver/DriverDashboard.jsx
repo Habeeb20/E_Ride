@@ -32,7 +32,8 @@ import im2 from "../../assets/Rectangle 90 (2).png";
 import im3 from "../../assets/Rectangle 90.png";
 import axios from "axios";
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa";
-import DriverFare from "./DriverFare";
+// import DriverFare from "./DriverFare";
+import ViewAvailableRides from "./viewAvailableRides";
 
 const DriverDashboard = () => {
   const sliderRef = useRef(null);
@@ -46,7 +47,7 @@ const DriverDashboard = () => {
     { x: window.innerWidth - 50, y: window.innerHeight - 50, targetX: window.innerWidth / 2, targetY: window.innerHeight / 2 },
   ]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("profile");
+  const [activeTab, setActiveTab] = useState("bookRide");
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState({});
   const [allSchedules, setAllSchedules] = useState([]);
@@ -312,7 +313,7 @@ const token = localStorage.getItem("token")
         const token = localStorage.getItem("token")
         const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/myAcceptedSchedule`, {
           headers: {
-            Authorization: `Beare ${token}`
+            Authorization: `Bearer ${token}`
           }
         })
         setMyAcceptedSchedule(response.data.schedules)
@@ -487,7 +488,7 @@ const token = localStorage.getItem("token")
   const isDriver = profile?.role === "driver";
 
   const sidebarItems = [
-    { id: "bookRide", label: "Book a Ride", icon: FaCar },
+    { id: "bookRide", label: "View available ride requests", icon: FaCar },
     { id: "appointments", label: "Your appointments", icon: FaCar },
     { id: "city", label: "City to City", icon: FaRoute },
     { id: "freight", label: "Freight Deliveries", icon: FaTruck },
@@ -712,6 +713,10 @@ const token = localStorage.getItem("token")
                   </div>
                 )}
               </div>
+            )}
+
+            {activeTab === "bookRide" && (
+              <ViewAvailableRides />
             )}
 
             {activeTab === "schedules" && (
@@ -1267,7 +1272,7 @@ const token = localStorage.getItem("token")
             )}
 
             {activeTab === "freight" && (
-              <DriverFare />
+            <></>
 
             )}
 

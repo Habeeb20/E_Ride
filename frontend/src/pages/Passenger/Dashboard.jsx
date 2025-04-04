@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import  { useState, useEffect, useRef } from "react";
 import im from "../../assets/pic.jpg";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
@@ -36,7 +36,7 @@ import axios from "axios";
 import { statesAndLgas } from "../../stateAndLga";
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa"; // Import arrow icons
 import Fare from "../Fare";
-import Ride from "../Ride";
+import Ride from "./Ride";
 
 
 // Inside your Dashboard component:
@@ -95,6 +95,16 @@ const Dashboard = () => {
     date:""
   })
   const [pickupModal, setPickupModals] = useState(false)
+
+  const [rideForm, setRideForm] = useState({
+    pickupAddress: "",
+    destinationAddress: "",
+    distance: "",
+    calculatedPrice: "",
+    desiredPrice: "",
+    rideOption: "",
+    paymentMethod: "",
+  });
 
   const handleCloseNotification = () => {
     setShowNotification(false);
@@ -459,24 +469,7 @@ const Dashboard = () => {
     }
   };
 
-  // const fetchAllSchedules = async () => {
-  //   const token = localStorage.getItem("token");
-  //   try {
-  //     const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/allschedules`, {
-  //       headers: { Authorization: `Bearer ${token}` },
-  //     });
-  //     if (response.data.status) {
-  //       setAllSchedules(response.data.schedules);
-  //       console.log(response.data.schedules, "all schedules");
-  //     } else {
-  //       setAllSchedules([]);
-  //     }
-  //   } catch (error) {
-  //     console.error("Error fetching all schedules:", error);
-  //     setAllSchedules([]);
-  //     toast.error("Failed to fetch all schedules", { style: { background: "#F44336", color: "white" } });
-  //   }
-  // };
+ 
 
   useEffect(() => {
     if (activeTab === "ownACar") {
@@ -672,6 +665,37 @@ const Dashboard = () => {
 
     fetchMyAirportsPickups()
   }, [])
+
+
+    // Handle ride submission aligned with /create route
+    const handleRideSubmit = async (e) => {
+      e.preventDefault();
+      const token = localStorage.getItem("token");
+      try {
+        setLoading(true);
+        const response = await axios.post(
+          `${import.meta.env.VITE_BACKEND_URL}/api/rides/create`,
+          rideForm,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        toast.success("Ride request created successfully", { style: { background: "#4CAF50", color: "white" } });
+        setRideForm({
+          pickupAddress: "",
+          destinationAddress: "",
+       
+          distance: "",
+          calculatedPrice: "",
+          desiredPrice: "",
+          rideOption: "",
+          paymentMethod: "",
+        });
+      } catch (error) {
+        const errorMessage = error.response?.data?.error || "Failed to create ride request";
+        toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
+      } finally {
+        setLoading(false);
+      }
+    };
 
 
   

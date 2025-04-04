@@ -146,45 +146,7 @@ router.post('/calculate-fare', async (req, res) => {
 
 
 
-  // router.get('/driver/:id', verifyToken, async (req, res) => {
-  //   try {
-  //     const driverId = req.params.id;
-  
-  //     // Find the driver by ID in the Profile collection
-  //     const driver = await Profile.findById(driverId);
-  //     if (!driver) {
-  //       console.log(`Driver not found for ID: ${driverId}`);
-  //       return res.status(404).json({ error: 'Driver not found' });
-  //     }
-  
-  //     // Ensure the profile is a driver
-  //     if (driver.role !== 'driver') {
-  //       console.log(`Profile with ID ${driverId} is not a driver. Role: ${driver.role}`);
-  //       return res.status(400).json({ error: 'Profile is not a driver' });
-  //     }
-  
-  //     // Prepare the response with the fields needed by the frontend
-  //     const driverDetails = {
-  //       firstName: driver.firstName || driver.name || 'Unknown', 
-  //       lastName : driver.lastName,
-  //       phoneNumber: driver.phoneNumber,
-  //       carDetails: {
-  //         model: driver.carDetails?.model || 'Unknown',
-  //         product: driver.carDetails?.product || 'Unknown',
-  //         year: driver.carDetails?.year || 0,
-  //         plateNumber: driver.carDetails?.plateNumber || 'Unknown',
-  //       },
-  //       carPicture: driver.carPicture || '', // Include carPicture if available
-  //     };
-  
-  //     console.log(`Driver details fetched for ID ${driverId}:`, driverDetails);
-  //     res.status(200).json(driverDetails);
-  //   } catch (error) {
-  //     console.error(`Error fetching driver details for ID ${req.params.id}:`, error.message);
-  //     res.status(500).json({ error: 'Error fetching driver details', details: error.message });
-  //   }
-  // });
-
+ 
 
 
 // Fetch Delivery Offers for Driver
