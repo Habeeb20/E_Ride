@@ -37,6 +37,7 @@ import { statesAndLgas } from "../../stateAndLga";
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa"; // Import arrow icons
 import Fare from "../Fare";
 import Ride from "./Ride";
+import RideHistory from "./RideHistory";
 
 
 // Inside your Dashboard component:
@@ -990,9 +991,9 @@ const Dashboard = () => {
             )}
 
             {activeTab === "rides" && (
-              <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-lg max-w-lg mx-auto">
-                <h3 className="text-xl font-semibold mb-4">Your Rides</h3>
-                <p className="text-gray-600">No ride history available yet.</p>
+              <div className="">
+                <RideHistory />
+                
               </div>
             )}
 
@@ -2195,6 +2196,9 @@ const Dashboard = () => {
                 </div>
               </div>
             )}
+
+
+    
           </main>
         </div>
       </div>

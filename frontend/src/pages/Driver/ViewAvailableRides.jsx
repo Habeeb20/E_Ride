@@ -312,6 +312,7 @@ function ViewAvailableRides() {
                   <p className={theme === 'light' ? 'text-green-700 font-bold' : 'text-green-300 font-bold'}>From: {ride.pickupAddress}</p>
                   <p className={theme === 'light' ? 'text-green-700 font-bold' : 'text-green-300 font-bold'}>To: {ride.destinationAddress}</p>
                   <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Distance: {ride.distance} km</p>
+                  <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Number of passengers: {ride.passengerNum} </p>
                   <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Price: ₦{ride.calculatedPrice}</p>
                   {ride.desiredPrice && (
                     <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Passenger's Offer: ₦{ride.desiredPrice}</p>
@@ -323,7 +324,7 @@ function ViewAvailableRides() {
                   )}
                   <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Ride Option: {ride.rideOption}</p>
                   <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Payment Method: {ride.paymentMethod}</p>
-                  <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Passenger: {ride.passenger?.userId.firstName} ({ride.passenger?.userEmail})</p>
+                  <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Passenger: {ride.userId?.firstName} ({ride.passenger?.userEmail})</p>
                   <div className="flex space-x-2 mt-2">
                     <button
                       onClick={(e) => { e.stopPropagation(); handleAcceptRide(ride._id); }}

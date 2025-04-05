@@ -329,7 +329,7 @@ authRouter.get("/dashboard", verifyToken, async(req, res) => {
         });
       }
   
-      console.log("Profile found:", profile);
+  
   
     
       return res.status(200).json({
@@ -337,7 +337,7 @@ authRouter.get("/dashboard", verifyToken, async(req, res) => {
         data: profile,
       });
     } catch (error) {
-      console.error("Dashboard error:", error);
+   
       return res.status(500).json({
         status: false,
         message: "An error occurred",
@@ -366,7 +366,7 @@ authRouter.post('/save-location', async (req, res) => {
       );
       res.status(200).json({ message: 'Location saved', user });
   } catch (error) {
-      console.error('Error saving location:', error);
+      
       res.status(500).json({ message: 'Server error' });
   }
 });
@@ -382,7 +382,7 @@ authRouter.get('/get-location/:userId', async (req, res) => {
       }
       res.status(200).json(user.location);
   } catch (error) {
-      console.error('Error fetching location:', error);
+  
       res.status(500).json({ message: 'Server error' });
   }
 });

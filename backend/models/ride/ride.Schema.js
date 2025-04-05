@@ -3,7 +3,12 @@ import mongoose from "mongoose";
 
 
 const rideSchema = new mongoose.Schema({
-  passenger: { type: mongoose.Schema.Types.ObjectId, ref: "Profile", required: true },
+  userId:{
+    type:mongoose.Schema.Types.ObjectId, ref: "Auth", required: true
+  },
+  passenger: {
+    type: mongoose.Schema.Types.ObjectId, ref: "Profile", required: true
+   },
   driver: { type: mongoose.Schema.Types.ObjectId, ref: "Profile", required: false },
   pickupAddress: { type: String, required: true },
   destinationAddress: { type: String, required: true },
@@ -19,13 +24,14 @@ const rideSchema = new mongoose.Schema({
   calculatedPrice: { type: Number, required: true },
   desiredPrice: { type: Number, required: false },
   finalPrice: { type: Number, required: false },
+  passengerNum:{type:Number, required: false},
   distance: { type: Number, required: true },
   rideOption: { type: String, enum: ["economy", "premium", "shared"], default: "economy" },
   paymentMethod: { type: String, enum: ["cash", "card"], required: true },
   interestedDrivers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Profile' }],
   status: {
     type: String,
-    enum: ["pending", "accepted", "in_progress", "completed", "cancelled"],
+    enum: ["pending", "accepted", "in_progress", "completed", "cancelled", "rejected"],
     default: "pending",
   },
   driverOffers: [

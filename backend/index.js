@@ -18,6 +18,7 @@ import airportRoute from "./routes/airport.js";
 import rideRoute from "./routes/fare.Route.js";
 import deliveryRouter from "./routes/delivery.Route.js";
 import ridesRouterWithIO from "./routes/eride.Route.js";
+import erideRouter from "./routes/eride.Route.js";
 
 
 dotenv.config();
@@ -59,7 +60,7 @@ app.use("/api/schedule", ScheduleRoute);
 app.use("/api/airport", airportRoute);
 app.use("/api/fare", rideRoute);
 app.use("/api/delivery", deliveryRouter);
-app.use("/api/rides", ridesRouterWithIO(io)); 
+app.use('/api/rides', erideRouter(io)); 
 
 // Socket.IO setup
 io.on("connection", (socket) => {
@@ -75,6 +76,8 @@ io.on("connection", (socket) => {
   });
 });
 
+
+app.set("io", io)
 // Start server
 const port = process.env.PORT || 2000;
 server.listen(port, () => {

@@ -23,14 +23,17 @@ async function geocodeAddress(address) {
   }
 }
 
-export default function ridesRouterWithIO(io) {
+
+export default (io) => {
+  const erideRouter = express.Router();
+
 
   erideRouter.post("/create", verifyToken, async (req, res) => {
     const passengerId = req.user.id; 
     const {
       pickupAddress,
       destinationAddress,
-  
+      passengerNum,
       distance,
       calculatedPrice,
       desiredPrice,
@@ -42,6 +45,7 @@ export default function ridesRouterWithIO(io) {
       if (
         !pickupAddress ||
         !destinationAddress ||
+        !passengerNum ||
         !distance ||
         !calculatedPrice ||
         !rideOption ||
@@ -50,16 +54,28 @@ export default function ridesRouterWithIO(io) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
-      const passenger = await Profile.findOne({userId:passengerId});
+      const user = await User.findById(passengerId);
+      if(!user){
+        return res.status(404).json({
+          status: false,
+          message: "user details not found"
+        })
+      }
+
+      const profileId = user._id
+
+      const passenger = await Profile.findOne({userId:profileId});
       if (!passenger || passenger.role !== "passenger") {
         return res.status(400).json({ error: "Invalid passenger" });
       }
 
       const ride = new Ride({
-        passenger: passengerId,
+        userId: user._id,
+        passenger: passenger._id,
         pickupAddress,
         destinationAddress,
         distance,
+        passengerNum,
         calculatedPrice,
         desiredPrice: desiredPrice || calculatedPrice, 
         rideOption,
@@ -75,6 +91,7 @@ export default function ridesRouterWithIO(io) {
           pickupAddress,
           destinationAddress,
           distance,
+          passengerNum,
           calculatedPrice,
           desiredPrice,
         })
@@ -93,29 +110,21 @@ export default function ridesRouterWithIO(io) {
   erideRouter.get("/available", verifyToken, async (req, res) => {
     try {
       const rides = await Ride.find({ status: 'pending', driver: null })
-        .populate({
-          path: 'passenger', 
-          select: 'userId profilePicture',
-          populate: ({
-            path: 'userId', 
-            model: 'Auth',
-            select: 'firstName lastName email phoneNumber'
-          })
-        })
+        .populate("passenger", "profilePicture userEmail")
+        .populate("userId", "firstName lastName email")
         .select('-__v');
-  
+      
       if (!rides.length) {
         return res.status(200).json([]);
       }
-  
-      console.log("your rides!!!", rides);
+      
+      console.log("Available rides:", rides);
       res.status(200).json(rides);
     } catch (error) {
       console.error('Error fetching available rides:', error);
       res.status(500).json({ error: 'Server error while fetching rides' });
     }
   });
-  
   // Fetch nearby rides (Driver)
   erideRouter.get("/nearby", verifyToken, async (req, res) => {
     const driverId = req.user.id;
@@ -482,63 +491,108 @@ erideRouter.get("/my-ride-drivers", verifyToken, async (req, res) => {
 
 
 
+  ////fetch all the rides for a passenger
 
+  erideRouter.get('/passengerRides', verifyToken, async (req, res) => {
+    try {
 
-
-
-
-
-
-erideRouter.get('/:rideId/interested-drivers', verifyToken, async (req, res) => {
-  const userId = req.user.id
-  try {
-    const ride = await Ride.findById(req.params.rideId).populate('driver');
-    if (!ride) return res.status(404).json({ error: 'Ride not found' });
-    if (ride.passenger?.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Unauthorized' });
+      const userId = req.user.id
+    
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          status: false,
+          message: 'Authentication failed. Invalid token or user not found.',
+        });
+      }
+      
+    
+      const userProfile = await Profile.findOne({ userId });
+      if (!userProfile) {
+        return res.status(404).json({
+          status: false,
+          message: 'Profile not found for this user',
+        });
+      }
+      
+      const rides = await Ride.findOne({ 'passenger': userProfile._id })
+        // .sort({ createdAt: -1 })
+        .populate( 'driverOffers.driver', "firstName lastName email");
+      
+   
+      console.log('Fetched rides:', rides);
+      res.json(rides);
+    } catch (error) {
+      console.error('Error fetching ride history:', error);
+      res.status(500).json({ error: 'Server error while fetching ride history' });
     }
+  });
 
-    let pickupCoords = ride.pickupCoordinates;
-    if (!pickupCoords || (!pickupCoords.lat && !pickupCoords.lng)) {
-      pickupCoords = await geocodeAddress(ride.pickupAddress);
-      ride.pickupCoordinates = pickupCoords;
-      await ride.save(); 
-    }
 
-    const interestedDrivers = await Profile.find({
-      _id: { $in: ride.interestedDrivers || [ride.driver] },
-      role: 'driver',
-    });
-
-    const driverDetails = interestedDrivers.map(driver => {
-      const distance = calculateDistance(
-        driver.location?.lat || 0,
-        driver.location?.lng || 0,
-        pickupCoords.lat || 0,
-        pickupCoords.lng || 0
-      );
-      return {
+  erideRouter.get('/:rideId/interested-drivers', verifyToken, async (req, res) => {
+    try {
+      const ride = await Ride.findById(req.params.rideId).populate('driver');
+      if (!ride) return res.status(404).json({ error: 'Ride not found' });
+      if (!req.user || !ride.passenger?.userId || ride.passenger.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+  
+      const interestedDrivers = await Profile.find({
+        _id: { $in: ride.interestedDrivers || [ride.driver] },
+        role: 'driver',
+      });
+  
+      const driverDetails = interestedDrivers.map(driver => ({
         _id: driver._id,
         firstName: driver.firstName,
         carDetails: driver.carDetails,
-        distance: distance.toFixed(2) + ' km',
+        distance: 'Calculating...', // Replace with real distance if available
         driverProposedPrice: ride.negotiationStatus === 'pending' && ride.driver?.toString() === driver._id.toString() ? ride.driverProposedPrice : null,
-      };
-    });
-
-    res.json(driverDetails);
-  } catch (error) {
-    console.error('Error fetching interested drivers:', error);
-    res.status(500).json({ error: 'Server error while fetching interested drivers' });
-  }
-});
-
+      }));
+  
+      res.json(driverDetails);
+    } catch (error) {
+      console.error('Error fetching interested drivers:', error);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
 
 
 
 
 
-
+  erideRouter.put('/:rideId/negotiate', verifyToken, async (req, res) => {
+    const io = req.app.get('io');
+    try {
+      const { driverId, proposedPrice } = req.body;
+      const ride = await Ride.findById(req.params.rideId);
+      if (!ride) return res.status(404).json({ error: 'Ride not found' });
+  
+      const driver = await Profile.findOne({ _id: driverId, role: 'driver' });
+      if (!driver) return res.status(404).json({ error: 'Driver not found' });
+  
+      // Add driver to interestedDrivers if not already present
+      if (!ride.interestedDrivers.includes(driverId)) {
+        ride.interestedDrivers.push(driverId);
+      }
+      ride.driverProposedPrice = proposedPrice;
+      ride.negotiationStatus = 'pending';
+      await ride.save();
+  
+      // Emit event to the ride room
+      io.to(req.params.rideId).emit('driverNegotiated', {
+        _id: driver._id,
+        firstName: driver.firstName,
+        carDetails: driver.carDetails,
+        distance: 'Calculating...', // Replace with real distance if available
+        driverProposedPrice: proposedPrice,
+      });
+  
+      res.json({ message: 'Price negotiated', ride });
+    } catch (error) {
+      console.error('Error negotiating price:', error);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
 
 
 
@@ -606,7 +660,56 @@ erideRouter.get('/:rideId/interested-drivers', verifyToken, async (req, res) => 
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c; // Distance in km
   }
-
   return erideRouter ;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

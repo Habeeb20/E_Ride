@@ -5,6 +5,7 @@ import { FaArrowLeft, FaInfoCircle, FaSun, FaMoon, FaCar, FaEye, FaTimes } from 
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
+import io from 'socket.io-client';
 import im from "../../assets/Board Cover.jpg";
 import im2 from "../../assets/Car rental logo_ 12_667 fotos e imagens stock livres de direitos _ Shutterstock.jpg";
 import im3 from "../../assets/download.jpg";
@@ -16,6 +17,7 @@ function Ride() {
     distance: "",
     calculatedPrice: "",
     desiredPrice: "",
+    passengerNum: "",
     rideOption: "economy",
     paymentMethod: "",
   });
@@ -39,17 +41,23 @@ function Ride() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [passengerId, setPassengerId] = useState('');
-  const [theme, setTheme] = useState('light');
+  const [theme, setTheme] = useState('dark');
   const [currentLocation, setCurrentLocation] = useState(null);
   const [showFeatures, setShowFeatures] = useState({ economy: false, premium: false, shared: false });
   const [interestedDrivers, setInterestedDrivers] = useState([]);
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [showDriverModal, setShowDriverModal] = useState(false);
+
   const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const embedApiKey = import.meta.env.VITE_EMBED_API_KEY;
-
   const token = localStorage.getItem("token");
   const navigate = useNavigate();
+
+  // Initialize Socket.io
+  const socket = io(import.meta.env.VITE_BACKEND_URL, {
+    auth: { token },
+    autoConnect: false,
+  });
 
   const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
 
@@ -125,23 +133,72 @@ function Ride() {
     fetchNearbyDrivers();
   }, []);
 
-  // Fetch interested drivers
+  // Connect to WebSocket and listen for real-time updates
   useEffect(() => {
-    if (!deliveryId || rideStarted) return;
-    const fetchInterestedDrivers = async () => {
-      try {
-        const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/rides/${deliveryId}/interested-drivers`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setInterestedDrivers(response.data);
-      } catch (error) {
-        console.error('Error fetching interested drivers:', error);
-      }
+    if (!token || !deliveryId) return;
+
+    socket.connect();
+    socket.emit('joinRide', deliveryId);
+
+    // Handle driver negotiation
+    socket.on('driverNegotiated', (driver) => {
+      setInterestedDrivers((prev) => {
+        const exists = prev.find(d => d._id === driver._id);
+        if (exists) {
+          return prev.map(d => d._id === driver._id ? driver : d);
+        }
+        return [...prev, driver];
+      });
+      toast.info(`${driver.firstName} has proposed a price of ₦${driver.driverProposedPrice}`, {
+        style: { background: '#2196F3', color: 'white' }
+      });
+    });
+
+    // Handle driver acceptance (initial proposal from driver)
+    socket.on('driverAccepted', (data) => {
+      const { driver } = data;
+      setSelectedDriver({
+        _id: driver._id,
+        firstName: driver.firstName,
+        carDetails: {
+          model: driver.carDetails.model,
+          year: driver.carDetails.year,
+          plateNumber: driver.carDetails.plateNumber,
+        },
+        distance: driver.distance || 'Calculating...',
+        driverProposedPrice: driver.driverProposedPrice || rideForm.calculatedPrice,
+        rating: driver.rating || 'N/A',
+      });
+      setShowDriverModal(true); // Show modal for passenger to accept/reject
+      toast.info(`${driver.firstName} has accepted your ride request`, {
+        style: { background: '#2196F3', color: 'white' }
+      });
+    });
+
+    // Handle passenger confirmation (ride officially starts)
+    socket.on('rideConfirmed', (data) => {
+      const { driver } = data;
+      setDriverDetails({
+        name: driver.firstName,
+        car: `${driver.carDetails.model} (${driver.carDetails.year})`,
+        licensePlate: driver.carDetails.plateNumber,
+        distance: driver.distance || 'Calculating...',
+        driverProposedPrice: driver.driverProposedPrice || rideForm.calculatedPrice,
+      });
+      setRideStarted(true);
+      setEta('5 minutes');
+      setInterestedDrivers([]);
+      setShowDriverModal(false);
+      toast.success(`${driver.firstName} has been assigned to your ride`, {
+        style: { background: '#4CAF50', color: 'white' }
+      });
+    });
+
+    // Cleanup
+    return () => {
+      socket.disconnect();
     };
-    fetchInterestedDrivers();
-    const interval = setInterval(fetchInterestedDrivers, 5000); // Poll every 5 seconds
-    return () => clearInterval(interval);
-  }, [deliveryId, rideStarted, token]);
+  }, [deliveryId, token]);
 
   // Simulate ride progress
   useEffect(() => {
@@ -195,7 +252,7 @@ function Ride() {
       setRideForm((prev) => ({
         ...prev,
         distance,
-        calculatedPrice: price, // Keep calculatedPrice independent of desiredPrice
+        calculatedPrice: price,
       }));
       setEta('5 minutes');
       setShowMap(true);
@@ -228,8 +285,9 @@ function Ride() {
           pickupAddress: rideForm.pickupAddress,
           destinationAddress: rideForm.destinationAddress,
           distance: rideForm.distance,
+          passengerNum: rideForm.passengerNum,
           calculatedPrice: rideForm.calculatedPrice,
-          desiredPrice: rideForm.desiredPrice || null, // Send null if no desired price
+          desiredPrice: rideForm.desiredPrice || null,
           rideOption: rideForm.rideOption,
           paymentMethod: rideForm.paymentMethod,
         },
@@ -251,28 +309,44 @@ function Ride() {
     try {
       setLoading(true);
       const response = await axios.put(
-        `${import.meta.env.VITE_BACKEND_URL}/api/rides/${deliveryId}/accept-driver`,
+        `${import.meta.env.VITE_BACKEND_URL}/api/rides/${deliveryId}/confirm-driver`,
         { driverId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-   
-      const acceptedDriver = interestedDrivers.find(driver => driver._id === driverId);
-      
+      const { driver } = response.data;
       setDriverDetails({
-        name: response.data.driver.firstName,
-        car: `${response.data.driver.carDetails.model} (${response.data.driver.carDetails.year})`,
-        licensePlate: response.data.driver.carDetails.plateNumber,
-        distance: response.data.driver.distance || 'Calculating...',
-        // Include driver's proposed price if available
-        driverProposedPrice: acceptedDriver?.driverProposedPrice || null
+        name: driver.firstName,
+        car: `${driver.carDetails.model} (${driver.carDetails.year})`,
+        licensePlate: driver.carDetails.plateNumber,
+        distance: driver.distance || 'Calculating...',
+        driverProposedPrice: driver.driverProposedPrice || rideForm.calculatedPrice,
       });
-      
       setRideStarted(true);
       setEta('5 minutes');
-      setInterestedDrivers([]); // Clear interested drivers after acceptance
-      toast.success("Driver accepted successfully", { style: { background: "#4CAF50", color: "white" } });
+      setShowDriverModal(false);
+      setInterestedDrivers([]);
+      toast.success("Driver confirmed successfully", { style: { background: "#4CAF50", color: "white" } });
     } catch (error) {
-      const errorMessage = error.response?.data?.error || "Failed to accept driver";
+      const errorMessage = error.response?.data?.error || "Failed to confirm driver";
+      toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRejectDriver = async (driverId) => {
+    try {
+      setLoading(true);
+      await axios.put(
+        `${import.meta.env.VITE_BACKEND_URL}/api/rides/${deliveryId}/reject-driver`,
+        { driverId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setShowDriverModal(false);
+      setSelectedDriver(null);
+      toast.info("Driver proposal rejected", { style: { background: "#2196F3", color: "white" } });
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || "Failed to reject driver";
       toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
     } finally {
       setLoading(false);
@@ -325,7 +399,6 @@ function Ride() {
     }
   };
 
-  // Fixed Google Maps URL
   const mapUrl = showMap
     ? `https://www.google.com/maps/embed/v1/directions?key=${embedApiKey}&origin=${encodeURIComponent(rideForm.pickupAddress)}&destination=${encodeURIComponent(rideForm.destinationAddress)}&mode=driving`
     : `https://www.google.com/maps/embed/v1/view?key=${embedApiKey}&center=${currentLocation?.lat || 0},${currentLocation?.lng || 0}&zoom=15`;
@@ -383,82 +456,81 @@ function Ride() {
       )}
 
       {/* Driver Details Modal */}
-  {/* Driver Details Modal */}
-{showDriverModal && selectedDriver && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div className={`rounded-lg p-6 w-11/12 max-w-md ${theme === 'light' ? 'bg-white' : 'bg-gray-700'}`}>
-      <button onClick={() => setShowDriverModal(false)} className="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
-        <FaTimes size={20} />
-      </button>
-      <h2 className={`text-xl font-bold mb-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Driver Details</h2>
-      
-      <div className="space-y-3">
-        <div className="flex items-center">
-          <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 mr-3">
-            <FaCar size={24} />
-          </div>
-          <div>
-            <p className={`font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>{selectedDriver.firstName}</p>
-            <p className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
-              {selectedDriver.carDetails.model} ({selectedDriver.carDetails.year})
-            </p>
-          </div>
-        </div>
-        
-        <div className={`grid grid-cols-2 gap-2 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
-          <p className="text-sm">License Plate:</p>
-          <p className="text-sm font-medium">{selectedDriver.carDetails.plateNumber}</p>
-          
-          <p className="text-sm">Distance:</p>
-          <p className="text-sm font-medium">{selectedDriver.distance || 'Unknown'}</p>
-          
-          <p className="text-sm">Rating:</p>
-          <p className="text-sm font-medium">{selectedDriver.rating || 'N/A'}</p>
-        </div>
-        
-        <div className={`mt-4 p-3 rounded-lg ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-600'}`}>
-          <h3 className="text-base font-semibold mb-2">Price Information</h3>
-          
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-sm">System Calculated:</span>
-              <span>₦{rideForm.calculatedPrice}</span>
-            </div>
-            
-            {rideForm.desiredPrice && (
-              <div className="flex justify-between">
-                <span className="text-sm">Your Offered Price:</span>
-                <span>₦{rideForm.desiredPrice}</span>
+      {showDriverModal && selectedDriver && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className={`rounded-lg p-6 w-11/12 max-w-md ${theme === 'light' ? 'bg-white' : 'bg-gray-700'}`}>
+            <button onClick={() => setShowDriverModal(false)} className="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
+              <FaTimes size={20} />
+            </button>
+            <h2 className={`text-xl font-bold mb-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Driver Proposal</h2>
+            <div className="space-y-3">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 mr-3">
+                  <FaCar size={24} />
+                </div>
+                <div>
+                  <p className={`font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>{selectedDriver.firstName}</p>
+                  <p className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
+                    {selectedDriver.carDetails.model} ({selectedDriver.carDetails.year})
+                  </p>
+                </div>
               </div>
-            )}
-            
-            {selectedDriver.driverProposedPrice && (
-              <div className="flex justify-between">
-                <span className="text-sm">Driver's Price:</span>
-                <span>₦{selectedDriver.driverProposedPrice}</span>
+              <div className={`grid grid-cols-2 gap-2 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
+                <p className="text-sm">License Plate:</p>
+                <p className="text-sm font-medium">{selectedDriver.carDetails.plateNumber}</p>
+                <p className="text-sm">Distance:</p>
+                <p className="text-sm font-medium">{selectedDriver.distance || 'Unknown'}</p>
+                <p className="text-sm">Rating:</p>
+                <p className="text-sm font-medium">{selectedDriver.rating || 'N/A'}</p>
               </div>
-            )}
-            
-            <div className={`flex justify-between pt-2 mt-2 border-t ${theme === 'light' ? 'border-gray-300' : 'border-gray-500'}`}>
-              <span className="font-medium">Final Price:</span>
-              <span className={`font-bold ${theme === 'light' ? 'text-green-600' : 'text-green-400'}`}>
-                ₦{selectedDriver.driverProposedPrice || rideForm.desiredPrice || rideForm.calculatedPrice}
-              </span>
+              <div className={`mt-4 p-3 rounded-lg ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-600'}`}>
+                <h3 className="text-base font-semibold mb-2">Price Information</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm">System Calculated:</span>
+                    <span>₦{rideForm.calculatedPrice}</span>
+                  </div>
+                  {rideForm.desiredPrice && (
+                    <div className="flex justify-between">
+                      <span className="text-sm">Your Offered Price:</span>
+                      <span>₦{rideForm.desiredPrice}</span>
+                    </div>
+                  )}
+                  {selectedDriver.driverProposedPrice && (
+                    <div className="flex justify-between">
+                      <span className="text-sm">Driver's Price:</span>
+                      <span>₦{selectedDriver.driverProposedPrice}</span>
+                    </div>
+                  )}
+                  <div className={`flex justify-between pt-2 mt-2 border-t ${theme === 'light' ? 'border-gray-300' : 'border-gray-500'}`}>
+                    <span className="font-medium">Final Price:</span>
+                    <span className={`font-bold ${theme === 'light' ? 'text-green-600' : 'text-green-400'}`}>
+                      ₦{selectedDriver.driverProposedPrice || rideForm.desiredPrice || rideForm.calculatedPrice}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => handleAcceptDriver(selectedDriver._id)}
+                  className="flex-1 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-all"
+                  disabled={loading}
+                >
+                  {loading ? 'Processing...' : 'Accept Driver'}
+                </button>
+                <button
+                  onClick={() => handleRejectDriver(selectedDriver._id)}
+                  className="flex-1 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-all"
+                  disabled={loading}
+                >
+                  {loading ? 'Processing...' : 'Reject Driver'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
-        
-        <button
-          onClick={() => handleAcceptDriver(selectedDriver._id)}
-          className="w-full py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-all mt-2"
-          disabled={loading}
-        >
-          {loading ? 'Processing...' : 'Accept Driver'}
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
+
       <div className={`flex-1 flex flex-col lg:flex-row p-4 gap-4 ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-800'}`}>
         <div className={`lg:w-[45%] w-full rounded-lg shadow-md p-4 overflow-y-auto max-h-[calc(100vh-120px)] ${theme === 'light' ? 'bg-white' : 'bg-gray-700'}`}>
           <h3 className={`text-lg font-bold mb-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Book A Ride</h3>
@@ -561,6 +633,18 @@ function Ride() {
               />
             </div>
 
+
+            <div className="mb-4">
+              <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>How many passengers</label>
+              <input
+                type="number"
+                value={rideForm.passengerNum}
+                onChange={(e) => setRideForm((prev) => ({ ...prev, passengerNum: e.target.value }))}
+                className={`w-full p-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
+                placeholder="number of passengers"
+              />
+            </div>
+
             <div className="mb-4">
               <label className={`block text-sm font-medium mb-1 ${theme === 'light' ? 'text-gray-700' : 'text-white'}`}>Payment Method</label>
               <select
@@ -600,113 +684,102 @@ function Ride() {
               </button>
             )}
 
-{deliveryId && !rideStarted && (
-  <div className="mt-4">
-    <h4 className={`text-base font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Interested Drivers</h4>
-    {interestedDrivers.length > 0 ? (
-      <ul className="space-y-2">
-        {interestedDrivers.map((driver) => (
-          <li key={driver._id} className={`p-3 border rounded-lg ${theme === 'light' ? 'border-gray-200 bg-white' : 'border-gray-600 bg-gray-700'}`}>
-            <div className="flex justify-between items-start">
-              <div>
-                <p className={`font-medium ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>{driver.firstName}</p>
-                <p className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
-                  Distance: {driver.distance || 'Unknown'}
-                </p>
-                <div className={`mt-2 p-2 rounded ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-600'}`}>
-                  <div className="flex justify-between">
-                    <span className="text-sm">System Price:</span>
-                    <span className="font-medium">₦{rideForm.calculatedPrice}</span>
-                  </div>
-                  {rideForm.desiredPrice && (
-                    <div className="flex justify-between">
-                      <span className="text-sm">Your Offer:</span>
-                      <span className="font-medium">₦{rideForm.desiredPrice}</span>
-                    </div>
-                  )}
-                  {driver.driverProposedPrice && (
-                    <div className="flex justify-between">
-                      <span className="text-sm">Driver's Price:</span>
-                      <span className={`font-medium ${theme === 'light' ? 'text-green-600' : 'text-green-400'}`}>
-                        ₦{driver.driverProposedPrice}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between mt-1 pt-1 border-t border-gray-300">
-                    <span className="text-sm font-medium">Final Price:</span>
-                    <span className={`font-medium ${theme === 'light' ? 'text-green-600' : 'text-green-400'}`}>
-                      ₦{driver.driverProposedPrice || rideForm.desiredPrice || rideForm.calculatedPrice}
-                    </span>
-                  </div>
-                </div>
+            {deliveryId && !rideStarted && (
+              <div className="mt-4">
+                <h4 className={`text-base font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Interested Drivers</h4>
+                {interestedDrivers.length > 0 ? (
+                  <ul className="space-y-2">
+                    {interestedDrivers.map((driver) => (
+                      <li key={driver._id} className={`p-3 border rounded-lg ${theme === 'light' ? 'border-gray-200 bg-white' : 'border-gray-600 bg-gray-700'}`}>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className={`font-medium ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>{driver.firstName}</p>
+                            <p className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
+                              Distance: {driver.distance || 'Unknown'}
+                            </p>
+                            <div className={`mt-2 p-2 rounded ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-600'}`}>
+                              <div className="flex justify-between">
+                                <span className="text-sm">System Price:</span>
+                                <span className="font-medium">₦{rideForm.calculatedPrice}</span>
+                              </div>
+                              {rideForm.desiredPrice && (
+                                <div className="flex justify-between">
+                                  <span className="text-sm">Your Offer:</span>
+                                  <span className="font-medium">₦{rideForm.desiredPrice}</span>
+                                </div>
+                              )}
+                              {driver.driverProposedPrice && (
+                                <div className="flex justify-between">
+                                  <span className="text-sm">Driver's Price:</span>
+                                  <span className={`font-medium ${theme === 'light' ? 'text-green-600' : 'text-green-400'}`}>
+                                    ₦{driver.driverProposedPrice}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex justify-between mt-1 pt-1 border-t border-gray-300">
+                                <span className="text-sm font-medium">Final Price:</span>
+                                <span className={`font-medium ${theme === 'light' ? 'text-green-600' : 'text-green-400'}`}>
+                                  ₦{driver.driverProposedPrice || rideForm.desiredPrice || rideForm.calculatedPrice}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-col space-y-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedDriver(driver);
+                                setShowDriverModal(true);
+                              }}
+                              className="p-1 text-blue-600 hover:text-blue-800 flex items-center"
+                            >
+                              <FaEye className="mr-1" /> Details
+                            </button>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className={`p-4 text-center ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
+                    Waiting for drivers to respond to your request...
+                  </p>
+                )}
               </div>
-              <div className="flex flex-col space-y-2">
+            )}
+
+            {rideStarted && driverDetails && (
+              <div className={`border-t pt-4 mt-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
+                <h4 className="text-base font-semibold">Driver Details</h4>
+                <p>Name: {driverDetails.name}</p>
+                <p>Car: {driverDetails.car}</p>
+                <p>License Plate: {driverDetails.licensePlate}</p>
+                <p>Distance: {driverDetails.distance}</p>
+                <p>ETA: {eta}</p>
+                <div className={`mt-3 p-3 rounded-lg ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-600'}`}>
+                  <h5 className="text-sm font-semibold mb-2">Price Information</h5>
+                  <p>Calculated Price: <span className="font-medium">{rideForm.calculatedPrice ? `₦${rideForm.calculatedPrice}` : 'N/A'}</span></p>
+                  {rideForm.desiredPrice && (
+                    <p>Your Offered Price: <span className="font-medium">₦{rideForm.desiredPrice}</span></p>
+                  )}
+                  {driverDetails.driverProposedPrice && (
+                    <p>Driver's Price: <span className="font-medium">₦{driverDetails.driverProposedPrice}</span></p>
+                  )}
+                  <p className="mt-2 font-semibold">
+                    Final Price: <span className={`${theme === 'light' ? 'text-green-600' : 'text-green-400'}`}>
+                      ₦{driverDetails.driverProposedPrice || rideForm.desiredPrice || rideForm.calculatedPrice}
+                    </span>
+                  </p>
+                </div>
                 <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedDriver(driver);
-                    setShowDriverModal(true);
-                  }}
-                  className="p-1 text-blue-600 hover:text-blue-800 flex items-center"
-                >
-                  <FaEye className="mr-1" /> Details
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAcceptDriver(driver._id)}
-                  className="py-1 px-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center"
+                  onClick={handleCancelRide}
+                  className="w-full py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-all mt-2"
                   disabled={loading}
                 >
-                  Accept
+                  {loading ? 'Cancelling...' : 'Cancel Ride'}
                 </button>
               </div>
-            </div>
-          </li>
-        ))}
-      </ul>
-    ) : (
-      <p className={`p-4 text-center ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
-        Waiting for drivers to respond to your request...
-      </p>
-    )}
-  </div>
-)}
-
-{rideStarted && driverDetails && (
-  <div className={`border-t pt-4 mt-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
-    <h4 className="text-base font-semibold">Driver Details</h4>
-    <p>Name: {driverDetails.name}</p>
-    <p>Car: {driverDetails.car}</p>
-    <p>License Plate: {driverDetails.licensePlate}</p>
-    <p>Distance: {driverDetails.distance}</p>
-    <p>ETA: {eta}</p>
-    
-    {/* Enhanced pricing information section */}
-    <div className={`mt-3 p-3 rounded-lg ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-600'}`}>
-      <h5 className="text-sm font-semibold mb-2">Price Information</h5>
-      <p>Calculated Price: <span className="font-medium">{rideForm.calculatedPrice ? `₦${rideForm.calculatedPrice}` : 'N/A'}</span></p>
-      {rideForm.desiredPrice && (
-        <p>Your Offered Price: <span className="font-medium">₦{rideForm.desiredPrice}</span></p>
-      )}
-      {driverDetails.driverProposedPrice && (
-        <p>Driver's Price: <span className="font-medium">₦{driverDetails.driverProposedPrice}</span></p>
-      )}
-      <p className="mt-2 font-semibold">
-        Final Price: <span className={`${theme === 'light' ? 'text-green-600' : 'text-green-400'}`}>
-          ₦{driverDetails.driverProposedPrice || rideForm.desiredPrice || rideForm.calculatedPrice}
-        </span>
-      </p>
-    </div>
-    
-    <button
-      onClick={handleCancelRide}
-      className="w-full py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-all mt-2"
-      disabled={loading}
-    >
-      {loading ? 'Cancelling...' : 'Cancel Ride'}
-    </button>
-  </div>
-)}
+            )}
 
             {rideStarted && (
               <div className="mt-4">
@@ -753,11 +826,6 @@ function Ride() {
                 </button>
               </div>
             )}
-            {/* {paymentCompleted && (
-              <div className={`mt-2 ${theme === 'light' ? 'text-green-600' : 'text-green-400'}`}>
-                <p>Payment completed successfully!</p>
-              </div>
-            )} */}
 
             {paymentCompleted && (
               <div className="mt-4">
@@ -810,6 +878,40 @@ function Ride() {
 }
 
 export default Ride;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
