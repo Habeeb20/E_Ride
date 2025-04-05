@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 
 const rideSchema = new mongoose.Schema({
   userId:{
-    type:mongoose.Schema.Types.ObjectId, ref: "Auth", required: true
+    type:mongoose.Schema.Types.ObjectId, ref: "Auth", required: false
   },
   passenger: {
     type: mongoose.Schema.Types.ObjectId, ref: "Profile", required: true

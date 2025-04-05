@@ -4,7 +4,7 @@ import { FaArrowLeft, FaInfoCircle, FaSun, FaMoon, FaCar } from 'react-icons/fa'
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
-
+import { FaPhone } from 'react-icons/fa';
 function ViewAvailableRides() {
   const [availableRides, setAvailableRides] = useState([]);
   const [selectedRide, setSelectedRide] = useState(null);
@@ -308,9 +308,40 @@ function ViewAvailableRides() {
                   className={`p-4 border rounded-lg cursor-pointer ${selectedRide?._id === ride._id ? 'border-green-500' : theme === 'light' ? 'border-gray-200' : 'border-gray-600'}`}
                   onClick={() => handleRideSelect(ride)}
                 >
+                        <div className="flex items-center space-x-4">
+                                  <img
+                                    className="w-16 h-16 rounded-full border-4 border-customGreen shadow-lg object-cover transition-all duration-300 hover:scale-105 hover:shadow-xl hover:border-customGreen-dark"
+                                    src={ride.passenger?.profilePicture || "https://via.placeholder.com/150"}
+                                    alt={`${ride.userId?.firstName} ${ride.userId?.lastName}`}
+                                  />
+                                  <button
+                                    onClick={() =>
+                                      window.open(
+                                        ride.passenger?.profilePicture || "https://via.placeholder.com/150",
+                                        "_blank"
+                                      )
+                                    }
+                                    className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-customPink transition-colors duration-200"
+                                  >
+                                    View
+                                  </button>
+                                </div>
                   <p className={`font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Ride ID: {ride._id}</p>
-                  <p className={theme === 'light' ? 'text-green-700 font-bold' : 'text-green-300 font-bold'}>From: {ride.pickupAddress}</p>
-                  <p className={theme === 'light' ? 'text-green-700 font-bold' : 'text-green-300 font-bold'}>To: {ride.destinationAddress}</p>
+                  <p className={`font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Passenger's Full-Name: <span className='text-green-300 font-bold'>{ride.userId?.firstName} {ride.userId?.lastName}</span></p>
+                  <p className={`font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Passenger's email: <span className="text-green-300 font-bold">{ride.passenger?.userEmail}</span> </p>
+                  <p className={`font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
+      Passenger's Phone Num:{' '}
+      <a
+        href={`tel:${ride.passenger?.phoneNumber}`}
+        className="inline-flex items-center text-green-300 hover:text-green-400 transition-colors"
+        title={`Call ${ride.passenger?.phoneNumber}`}
+      >
+        <FaPhone className="mr-2" /> 
+        <span className="font-bold">{ride.passenger?.phoneNumber || 'N/A'}</span>
+      </a>
+    </p>
+                  <p className={theme === 'light' ? 'text-green-700 font-bold' : 'text-white font-bold'}>From: <span className='text-green-300 font-bold'>{ride.pickupAddress}</span> </p>
+                  <p className={theme === 'light' ? 'text-green-700 font-bold' : 'text-white font-bold'}>To: <span className='text-green-300 font-bold'>{ride.destinationAddress}</span>  </p>
                   <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Distance: {ride.distance} km</p>
                   <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Number of passengers: {ride.passengerNum} </p>
                   <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Price: ₦{ride.calculatedPrice}</p>
@@ -324,7 +355,7 @@ function ViewAvailableRides() {
                   )}
                   <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Ride Option: {ride.rideOption}</p>
                   <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Payment Method: {ride.paymentMethod}</p>
-                  <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Passenger: {ride.userId?.firstName} ({ride.passenger?.userEmail})</p>
+
                   <div className="flex space-x-2 mt-2">
                     <button
                       onClick={(e) => { e.stopPropagation(); handleAcceptRide(ride._id); }}
