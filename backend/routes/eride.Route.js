@@ -9,27 +9,42 @@ const erideRouter = express.Router()
 
 
 
+
+export default (io) => {
+  const erideRouter = express.Router();
+
+  
 async function geocodeAddress(address) {
   try {
     const response = await axios.get(
       `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`,
-      { headers: { 'User-Agent': 'e_RideProject/1.0' } } // Add User-Agent to comply with Nominatim policy
+      { headers: { 'User-Agent': 'e_RideProject/1.0' } }
     );
     const data = response.data[0];
     return { lat: parseFloat(data.lat), lng: parseFloat(data.lon) };
   } catch (error) {
     console.error('Geocoding error:', error);
-    return { lat: 0, lng: 0 }; // Fallback
+    return { lat: 0, lng: 0 }; 
   }
 }
 
 
-export default (io) => {
-  const erideRouter = express.Router();
+
+  function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; 
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; 
+  }
 
 
-  erideRouter.post("/create", verifyToken, async (req, res) => {
-    const passengerId = req.user.id; 
+
+  erideRouter.post('/create', verifyToken, async (req, res) => {
+    const passengerId = req.user.id;
     const {
       pickupAddress,
       destinationAddress,
@@ -42,33 +57,44 @@ export default (io) => {
     } = req.body;
 
     try {
-      if (
-        !pickupAddress ||
+      // Validate required fields (excluding distance and calculatedPrice since we compute them)
+      if (  !pickupAddress ||
         !destinationAddress ||
         !passengerNum ||
         !distance ||
         !calculatedPrice ||
         !rideOption ||
-        !paymentMethod
-      ) {
-        return res.status(400).json({ error: "Missing required fields" });
+        !paymentMethod) {
+        return res.status(400).json({ error: 'Missing required fields' });
       }
 
       const user = await User.findById(passengerId);
-      if(!user){
+      if (!user) {
         return res.status(404).json({
           status: false,
-          message: "user details not found"
-        })
+          message: 'User details not found',
+        });
       }
 
-      const profileId = user._id
-
-      const passenger = await Profile.findOne({userId:profileId});
-      if (!passenger || passenger.role !== "passenger") {
-        return res.status(400).json({ error: "Invalid passenger" });
+      const passenger = await Profile.findOne({ userId: passengerId });
+      if (!passenger || passenger.role !== 'passenger') {
+        return res.status(400).json({ error: 'Invalid passenger' });
       }
 
+      // Geocode addresses
+      const pickupCoordinates = await geocodeAddress(pickupAddress);
+      const destinationCoordinates = await geocodeAddress(destinationAddress);
+      if (!pickupCoordinates || !destinationCoordinates) {
+        return res.status(400).json({ error: 'Failed to geocode addresses' });
+      }
+
+      
+      const computedDistance = calculateDistance(pickupCoordinates, destinationCoordinates);
+
+      // Calculate price (example: 200 NGN per km)
+      const computedPrice = Math.round(computedDistance * 200);
+
+      // Create ride with computed values
       const ride = new Ride({
         userId: user._id,
         passenger: passenger._id,
@@ -77,33 +103,50 @@ export default (io) => {
         distance,
         passengerNum,
         calculatedPrice,
-        desiredPrice: desiredPrice || calculatedPrice, 
+        desiredPrice: desiredPrice || calculatedPrice,
         rideOption,
         paymentMethod,
+        pickupCoordinates,
+        destinationCoordinates,
       });
       await ride.save();
 
-    
-      const nearbyDrivers = await Profile.find({ role: "driver" }); 
+      // Prepare ride data for emission
+      const rideData = {
+        _id: ride._id,
+        userId: { firstName: user.firstName, lastName: user.lastName },
+        passenger: {
+          userEmail: user.email,
+          phoneNumber: passenger.phoneNumber,
+          profilePicture: passenger.profilePicture,
+        },
+        pickupAddress,
+        destinationAddress,
+        distance: computedDistance,
+        passengerNum,
+        calculatedPrice: computedPrice,
+        desiredPrice: ride.desiredPrice,
+        rideOption,
+        paymentMethod,
+        pickupCoordinates,
+        destinationCoordinates,
+      };
+
+      // Broadcast to all drivers
+      io.emit('newRideAvailable', rideData);
+
+      // Notify nearby drivers (optional refinement later)
+      const nearbyDrivers = await Profile.find({ role: 'driver' });
       nearbyDrivers.forEach((driver) =>
-        io.to(driver._id.toString()).emit("newRideRequest", {
-          rideId: ride._id,
-          pickupAddress,
-          destinationAddress,
-          distance,
-          passengerNum,
-          calculatedPrice,
-          desiredPrice,
-        })
+        io.to(driver._id.toString()).emit('newRideRequest', rideData)
       );
 
       res.status(201).json(ride);
     } catch (error) {
-      console.error("Error creating ride:", error);
-      res.status(500).json({ error: "Failed to create ride" });
+      console.error('Error creating ride:', error);
+      res.status(500).json({ error: 'Failed to create ride' });
     }
   });
-
 
 
   ////fetch available ride request
@@ -191,19 +234,46 @@ export default (io) => {
     }
   });
 
-  erideRouter.post('/:rideId/accept-driver', verifyToken, async (req, res) => {
-    const passengerId = req.user.profileId; // Assuming profileId links to Profile
-    const { rideId } = req.params;
+  erideRouter.post('/:deliveryId/confirm-driver', verifyToken, async (req, res) => {
+    const userId = req.user.id; 
+    const { deliveryId } = req.params;
     const { driverId } = req.body;
 
     try {
-      const ride = await Ride.findById(rideId).populate('driverOffers.driver');
-      if (!ride || ride.passenger.toString() !== passengerId.toString()) {
-        return res.status(400).json({ error: 'Invalid ride or passenger' });
+   
+      const ride = await Ride.findById(deliveryId).populate('driverOffers.driver');
+      if (!ride) {
+        return res.status(404).json({ error: 'Ride not found' });
       }
 
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          status: false,
+          message: 'User not found',
+        });
+      }
+
+      const passengerProfile = await Profile.findOne({ userId: user._id });
+      if (!passengerProfile) {
+        return res.status(404).json({
+          status: false,
+          message: 'Profile not found for this user',
+        });
+      }
+
+      if (ride.passenger.toString() !== passengerProfile._id.toString()) {
+        return res.status(403).json({ error: 'You are not authorized to confirm this ride' });
+      }
+
+      // Check ride status
       if (ride.status !== 'pending') {
         return res.status(400).json({ error: 'Ride is not in a pending state' });
+      }
+
+      // Verify driver offer exists
+      if (!ride.driverOffers || ride.driverOffers.length === 0) {
+        return res.status(400).json({ error: 'No driver offers available' });
       }
 
       const offer = ride.driverOffers.find((o) => o.driver._id.toString() === driverId);
@@ -215,7 +285,7 @@ export default (io) => {
         return res.status(400).json({ error: 'Driver already assigned' });
       }
 
-      // Assign driver and update ride
+    
       ride.driver = driverId;
       ride.status = 'accepted';
       ride.finalPrice = offer.offeredPrice;
@@ -235,14 +305,14 @@ export default (io) => {
           year: 2020,
           plateNumber: 'ABC123',
         },
-        distance: '2 km', // Replace with actual data
+        distance: ride.distance, // Replace with actual calculation if available
         driverProposedPrice: offer.offeredPrice,
         rating: offer.driver.rating || '4.5',
       };
 
       // Notify driver and passenger
       io.to(ride._id.toString()).emit('rideConfirmed', { driver: driverData });
-      io.to(driverId).emit('rideAccepted', { rideId, passengerId });
+      io.to(driverId).emit('rideAccepted', { rideId: ride._id, passengerId: passengerProfile._id,    pickupCoordinates: ride.pickupCoordinates, });
       console.log('Emitted rideConfirmed and rideAccepted:', driverData);
 
       res.status(200).json({
@@ -255,26 +325,53 @@ export default (io) => {
     }
   });
 
-  // Fetch passenger ride history (optional, for completeness)
-  // erideRouter.get('/passenger/:passengerId', verifyToken, async (req, res) => {
-  //   try {
-  //     const passengerId = req.params.passengerId;
-  //     if (req.user.profileId.toString() !== passengerId) {
-  //       return res.status(403).json({ error: 'Unauthorized access' });
-  //     }
 
-  //     const rides = await Ride.find({ passenger: passengerId })
-  //       .populate('passenger', 'phoneNumber')
-  //       .populate('driver', 'firstName carDetails rating')
-  //       .populate('driverOffers.driver', 'firstName carDetails rating')
-  //       .sort({ createdAt: -1 });
+  erideRouter.post('/:deliveryId/reject-driver', verifyToken, async (req, res) => {
+    const userId = req.user.id;
+    const { deliveryId } = req.params;
+    const { driverId } = req.body;
 
-  //     res.json(rides);
-  //   } catch (error) {
-  //     console.error('Error fetching ride history:', error);
-  //     res.status(500).json({ error: 'Server error while fetching ride history' });
-  //   }
-  // });
+    try {
+      const ride = await Ride.findById(deliveryId).populate('driverOffers.driver');
+      if (!ride) {
+        return res.status(404).json({ error: 'Ride not found' });
+      }
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      const passengerProfile = await Profile.findOne({ userId: user._id });
+      if (!passengerProfile || ride.passenger.toString() !== passengerProfile._id.toString()) {
+        return res.status(403).json({ error: 'You are not authorized to reject this driver' });
+      }
+
+      if (ride.status !== 'pending') {
+        return res.status(400).json({ error: 'Ride is not in a pending state' });
+      }
+
+      const offer = ride.driverOffers.find((o) => o.driver._id.toString() === driverId);
+      if (!offer) {
+        return res.status(404).json({ error: 'Driver offer not found' });
+      }
+
+
+      offer.status = 'rejected';
+      ride.interestedDrivers = ride.interestedDrivers.filter((id) => id.toString() !== driverId);
+      await ride.save();
+
+ 
+      io.to(driverId).emit('driverRejected', { rideId: deliveryId });
+      io.to(ride._id.toString()).emit('driverOfferRejected', { driverId });
+      console.log('Emitted driverRejected and driverOfferRejected:', { driverId });
+
+      res.status(200).json({ message: 'Driver offer rejected successfully' });
+    } catch (error) {
+      console.error('Error rejecting driver:', error);
+      res.status(500).json({ error: 'Failed to reject driver' });
+    }
+  });
+
 
 
 
@@ -385,6 +482,32 @@ export default (io) => {
     }
   });
 
+
+
+
+erideRouter.post('/:rideId/update-location', verifyToken, async (req, res) => {
+  const { rideId } = req.params;
+  const { lat, lng } = req.body;
+  const userId = req.user._id;
+
+  try {
+    const ride = await Ride.findById(rideId);
+    if (!ride || !ride.driver) return res.status(404).json({ error: 'Ride or driver not found' });
+    const driverProfile = await Profile.findOne({ userId });
+    if (ride.driver.toString() !== driverProfile._id.toString()) {
+      return res.status(403).json({ error: 'Unauthorized to update location' });
+    }
+
+    ride.driverLocation = { lat, lng };
+    await ride.save();
+
+    io.to(ride._id.toString()).emit('driverLocationUpdate', { location: { lat, lng } });
+    res.status(200).json({ message: 'Location updated' });
+  } catch (error) {
+    console.error('Error updating driver location:', error);
+    res.status(500).json({ error: 'Failed to update location' });
+  }
+});
 
   erideRouter.put("/:rideId/negotiate", verifyToken, async(req, res) => {
     try {
@@ -697,119 +820,39 @@ erideRouter.get("/my-ride-drivers", verifyToken, async (req, res) => {
 
 
 
-  erideRouter.put('/:rideId/cancel', verifyToken, async (req, res) => {
+ 
+
+  erideRouter.post('/:rideId/cancel', verifyToken, async (req, res) => {
+    const userId = req.user.id;
+    const { rideId } = req.params;
+  
     try {
-      const ride = await Ride.findById(req.params.rideId);
+      const ride = await Ride.findById(rideId);
       if (!ride) return res.status(404).json({ error: 'Ride not found' });
-      if (ride.passenger.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ error: 'Unauthorized' });
+      const passengerProfile = await Profile.findOne({ userId });
+      if (ride.passenger.toString() !== passengerProfile._id.toString()) {
+        return res.status(403).json({ error: 'Unauthorized to cancel this ride' });
       }
-      if (ride.status === 'completed') return res.status(400).json({ error: 'Cannot cancel completed ride' });
+      if (ride.status === 'completed' || ride.status === 'cancelled') {
+        return res.status(400).json({ error: 'Ride cannot be cancelled' });
+      }
   
       ride.status = 'cancelled';
-      ride.driver = null;
-      ride.negotiationStatus = 'none';
-      ride.driverProposedPrice = null;
-      ride.interestedDrivers = [];
       await ride.save();
   
-      res.json({ message: 'Ride cancelled successfully', ride });
+      io.to(ride._id.toString()).emit('rideCancelled', { rideId });
+      io.to(ride.driver.toString()).emit('rideCancelledByPassenger', { rideId });
+      res.status(200).json({ message: 'Ride cancelled successfully' });
     } catch (error) {
       console.error('Error cancelling ride:', error);
-      res.status(500).json({ error: 'Server error while cancelling ride' });
+      res.status(500).json({ error: 'Failed to cancel ride' });
     }
   });
 
 
 
-  // Helper: Calculate distance (Haversine formula)
-  function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Earth radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Distance in km
-  }
   return erideRouter ;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

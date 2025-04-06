@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaArrowLeft, FaInfoCircle, FaSun, FaMoon, FaCar } from 'react-icons/fa';
+import { FaArrowLeft, FaInfoCircle, FaSun, FaMoon, FaCar, FaBell, FaTimes, FaPhone } from 'react-icons/fa';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
-import { FaPhone } from 'react-icons/fa';
+
+import io from 'socket.io-client';
+
+const socket = io(import.meta.env.VITE_BACKEND_URL, { autoConnect: false });
+
 function ViewAvailableRides() {
   const [availableRides, setAvailableRides] = useState([]);
   const [selectedRide, setSelectedRide] = useState(null);
@@ -15,6 +19,8 @@ function ViewAvailableRides() {
   const [loading, setLoading] = useState(false);
   const [showNegotiateModal, setShowNegotiateModal] = useState(false);
   const [negotiatePrice, setNegotiatePrice] = useState('');
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
   const [theme, setTheme] = useState('light');
   const [currentLocation, setCurrentLocation] = useState(null);
@@ -38,6 +44,62 @@ function ViewAvailableRides() {
       );
     }
   }, []);
+
+
+    // Socket.io setup for real-time notifications
+    useEffect(() => {
+      if (!token) return;
+  
+      socket.connect();
+      socket.on('connect', () => console.log('Socket connected:', socket.id));
+  
+      // Join driver-specific room and general ride updates
+      const driverId = localStorage.getItem('token');
+      if (driverId) {
+        socket.emit('join', driverId);
+        console.log('Driver joined room:', driverId);
+      }
+  
+      // Real-time available rides
+      socket.on('newRideAvailable', (ride) => {
+        console.log('New ride available:', ride);
+        setAvailableRides((prev) => {
+          if (!prev.some((r) => r._id === ride._id)) return [...prev, ride];
+          return prev;
+        });
+        toast.info('New ride available!', { style: { background: '#2196F3', color: 'white' } });
+      });
+      socket.on('rideAccepted', (data) => {
+        console.log('Ride accepted:', data);
+        setNotifications((prev) => [
+          ...prev,
+          { rideId: data.rideId, status: 'accepted', passengerId: data.passengerId, timestamp: new Date() },
+        ]);
+        toast.success('A passenger has accepted your ride!', { style: { background: '#4CAF50', color: 'white' } });
+      });
+  
+      socket.on('driverRejected', (data) => {
+        console.log('Driver rejected:', data);
+        setNotifications((prev) => [
+          ...prev,
+          { rideId: data.rideId, status: 'rejected', timestamp: new Date() },
+        ]);
+        setAvailableRides((prev) => prev.filter((r) => r._id !== data.rideId));
+        toast.info('Your ride offer was rejected', { style: { background: '#2196F3', color: 'white' } });
+      });
+  
+      socket.on('rideCancelledByPassenger', (data) => {
+        console.log('Ride cancelled:', data);
+        setNotifications((prev) => [
+          ...prev,
+          { rideId: data.rideId, status: 'cancelled', timestamp: new Date() },
+        ]);
+        toast.info('Ride cancelled by passenger', { style: { background: '#2196F3', color: 'white' } });
+      });
+  
+      return () => socket.disconnect();
+    }, [token, driverDetails]);
+  
 
   // Fetch driver profile
   useEffect(() => {
@@ -194,6 +256,28 @@ function ViewAvailableRides() {
     ? `https://www.google.com/maps/embed/v1/directions?key=${embedApiKey}&origin=${encodeURIComponent(selectedRide.pickupAddress)}&destination=${encodeURIComponent(selectedRide.destinationAddress)}&mode=driving`
     : `https://www.google.com/maps/embed/v1/view?key=${embedApiKey}&center=${currentLocation?.lat},${currentLocation?.lng}&zoom=15`;
 
+
+
+    const getPassengerMapUrl = (notification) => {
+      const ride = availableRides.find((r) => r._id === notification.rideId) || rideHistory.find((r) => r._id === notification.rideId);
+      return ride && notification.status === 'accepted'
+        ? `https://www.google.com/maps/embed/v1/view?key=${embedApiKey}&center=${ride.pickupCoordinates.lat},${ride.pickupCoordinates.lng}&zoom=15`
+        : '';
+    };
+  
+    const calculateDistance = (notification) => {
+      const ride = availableRides.find((r) => r._id === notification.rideId) || rideHistory.find((r) => r._id === notification.rideId);
+      if (!ride || !currentLocation || !ride.pickupCoordinates) return 'N/A';
+      const R = 6371; // Earth's radius in km
+      const dLat = (ride.pickupCoordinates.lat - currentLocation.lat) * (Math.PI / 180);
+      const dLng = (ride.pickupCoordinates.lng - currentLocation.lng) * (Math.PI / 180);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(currentLocation.lat * (Math.PI / 180)) * Math.cos(ride.pickupCoordinates.lat * (Math.PI / 180)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return (R * c).toFixed(2); // Distance in km
+    };
+  
   return (
     <div className={`h-full flex flex-col ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-800'}`}>
       {/* Header */}
@@ -209,6 +293,54 @@ function ViewAvailableRides() {
           </div>
         </button>
       </header>
+
+           {/* Notification Modal */}
+           {showNotificationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className={`rounded-lg p-6 w-11/12 max-w-md max-h-[80vh] overflow-y-auto ${theme === 'light' ? 'bg-white' : 'bg-gray-700'}`}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className={`text-xl font-bold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Notifications</h2>
+              <button onClick={() => setShowNotificationModal(false)} className="text-red-600">
+                <FaTimes />
+              </button>
+            </div>
+            {notifications.length > 0 ? (
+              <ul className="space-y-4">
+                {notifications.map((notification, index) => (
+                  <li key={index} className={`p-4 border rounded-lg ${theme === 'light' ? 'border-gray-200' : 'border-gray-600'}`}>
+                    <p className={`font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
+                      Ride ID: {notification.rideId}
+                    </p>
+                    <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>
+                      Status: {notification.status.charAt(0).toUpperCase() + notification.status.slice(1)}
+                    </p>
+                    <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>
+                      Time: {new Date(notification.timestamp).toLocaleString()}
+                    </p>
+                    {notification.status === 'accepted' && (
+                      <>
+                        <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>
+                          Distance to Passenger: {calculateDistance(notification)} km
+                        </p>
+                        <iframe
+                          width="100%"
+                          height="200"
+                          style={{ border: 0, borderRadius: '8px' }}
+                          src={getPassengerMapUrl(notification)}
+                          allowFullScreen
+                          loading="lazy"
+                        />
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className={theme === 'light' ? 'text-gray-600' : 'text-gray-300'}>No notifications yet.</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Profile and Ride History Modal */}
       {showProfile && (
@@ -412,3 +544,48 @@ function ViewAvailableRides() {
 }
 
 export default ViewAvailableRides;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

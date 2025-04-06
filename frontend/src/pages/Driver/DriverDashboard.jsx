@@ -34,6 +34,7 @@ import axios from "axios";
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa";
 // import DriverFare from "./DriverFare";
 import ViewAvailableRides from "./viewAvailableRides";
+import RideAcceptedNotification from "./RideAcceptedNotification";
 
 const DriverDashboard = () => {
   const sliderRef = useRef(null);
@@ -490,7 +491,7 @@ const token = localStorage.getItem("token")
   const sidebarItems = [
     { id: "bookRide", label: "View available ride requests", icon: FaCar },
     { id: "appointments", label: "Your appointments", icon: FaCar },
-    { id: "city", label: "City to City", icon: FaRoute },
+    { id: "city", label: "Ride Notifications", icon: FaRoute },
     { id: "freight", label: "Freight Deliveries", icon: FaTruck },
     { id: "bookings", label: "bookings", icon: FaCalendar },
     { id: "rides", label: "Rides", icon: FaRoute },
@@ -1274,6 +1275,10 @@ const token = localStorage.getItem("token")
             {activeTab === "freight" && (
             <></>
 
+            )}
+
+            {activeTab === "city"  && (
+              <RideAcceptedNotification />
             )}
 
 

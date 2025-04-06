@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import Autocomplete from 'react-google-autocomplete';
-import { FaArrowLeft, FaInfoCircle, FaSun, FaMoon, FaCar, FaEye, FaTimes } from 'react-icons/fa';
+import { FaArrowLeft, FaInfoCircle, FaSun, FaMoon, FaCar, FaEye, FaTimes,   FaRoute, } from 'react-icons/fa';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
@@ -10,6 +10,7 @@ import im from "../../assets/Board Cover.jpg";
 import im2 from "../../assets/Car rental logo_ 12_667 fotos e imagens stock livres de direitos _ Shutterstock.jpg";
 import im3 from "../../assets/download.jpg";
 import { FaPhone } from 'react-icons/fa';
+
 
 function Ride() {
   const [rideForm, setRideForm] = useState({
@@ -59,6 +60,12 @@ function Ride() {
     auth: { token },
     autoConnect: false,
   });
+
+
+      const navItems = [
+      
+        ...(rideStarted ? [{ id: 'city', label: 'Track Ride', icon: FaRoute, onClick: () => navigate(`/ride-tracking/${deliveryId}`) }] : []),
+      ];
 
   const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
 
@@ -306,30 +313,52 @@ function Ride() {
     }
   };
 
+  // const handleAcceptDriver = async (driverId) => {
+  //   try {
+  //     setLoading(true);
+  //     const response = await axios.post(
+  //       `${import.meta.env.VITE_BACKEND_URL}/api/rides/${deliveryId}/confirm-driver`,
+  //       { driverId },
+  //       { headers: { Authorization: `Bearer ${token}` } }
+  //     );
+  //     const { driver } = response.data;
+  //     setDriverDetails({
+  //       name: driver.firstName,
+  //       car: `${driver.carDetails.model} (${driver.carDetails.year})`,
+  //       licensePlate: driver.carDetails.plateNumber,
+  //       distance: driver.distance || 'Calculating...',
+  //       driverProposedPrice: driver.driverProposedPrice || rideForm.calculatedPrice,
+  //     });
+  //     setRideStarted(true);
+  //     setEta('5 minutes');
+  //     setShowDriverModal(false);
+  //     setInterestedDrivers([]);
+  //     toast.success("Driver confirmed successfully", { style: { background: "#4CAF50", color: "white" } });
+  //   } catch (error) {
+  //     console.log(error)
+  //     const errorMessage = error.response?.data?.error || "Failed to confirm driver";
+  //     toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+
+
   const handleAcceptDriver = async (driverId) => {
     try {
       setLoading(true);
-      const response = await axios.put(
+      await axios.post(
         `${import.meta.env.VITE_BACKEND_URL}/api/rides/${deliveryId}/confirm-driver`,
         { driverId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      const { driver } = response.data;
-      setDriverDetails({
-        name: driver.firstName,
-        car: `${driver.carDetails.model} (${driver.carDetails.year})`,
-        licensePlate: driver.carDetails.plateNumber,
-        distance: driver.distance || 'Calculating...',
-        driverProposedPrice: driver.driverProposedPrice || rideForm.calculatedPrice,
-      });
-      setRideStarted(true);
-      setEta('5 minutes');
-      setShowDriverModal(false);
-      setInterestedDrivers([]);
-      toast.success("Driver confirmed successfully", { style: { background: "#4CAF50", color: "white" } });
+    
+      toast.success('Driver confirmed successfully', { style: { background: '#4CAF50', color: 'white' } });
     } catch (error) {
-      const errorMessage = error.response?.data?.error || "Failed to confirm driver";
-      toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
+      console.error('Error confirming driver:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to confirm driver';
+      toast.error(errorMessage, { style: { background: '#F44336', color: 'white' } });
     } finally {
       setLoading(false);
     }
@@ -338,26 +367,44 @@ function Ride() {
   const handleRejectDriver = async (driverId) => {
     try {
       setLoading(true);
-      await axios.put(
+      await axios.post(
         `${import.meta.env.VITE_BACKEND_URL}/api/rides/${deliveryId}/reject-driver`,
         { driverId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setShowDriverModal(false);
-      setSelectedDriver(null);
-      toast.info("Driver proposal rejected", { style: { background: "#2196F3", color: "white" } });
+      toast.info('Driver proposal rejected', { style: { background: '#2196F3', color: 'white' } });
     } catch (error) {
-      const errorMessage = error.response?.data?.error || "Failed to reject driver";
-      toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
+      console.error('Error rejecting driver:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to reject driver';
+      toast.error(errorMessage, { style: { background: '#F44336', color: 'white' } });
     } finally {
       setLoading(false);
     }
   };
+  
+
+  useEffect(() => {
+    if (!token || !deliveryId) return;
+  
+    socket.connect();
+    socket.emit('joinRide', deliveryId);
+  
+    socket.on('driverOfferRejected', (data) => {
+      console.log('Driver offer rejected:', data);
+      setInterestedDrivers((prev) => prev.filter((d) => d._id !== data.driverId));
+      setShowDriverModal(false);
+      setSelectedDriver(null);
+    });
+  
+    // ... (other listeners like driverNegotiated, rideConfirmed)
+  
+    return () => socket.disconnect();
+  }, [deliveryId, token]);
 
   const handleCancelRide = async () => {
     try {
       setLoading(true);
-      await axios.put(
+      await axios.post(
         `${import.meta.env.VITE_BACKEND_URL}/api/rides/${deliveryId}/cancel`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
@@ -370,6 +417,7 @@ function Ride() {
       setInterestedDrivers([]);
       toast.success("Ride cancelled successfully", { style: { background: "#4CAF50", color: "white" } });
     } catch (error) {
+      console.log(error)
       const errorMessage = error.response?.data?.error || "Failed to cancel ride";
       toast.error(errorMessage, { style: { background: "#F44336", color: "white" } });
     } finally {
@@ -654,6 +702,15 @@ function Ride() {
                 >
                   {loading ? 'Processing...' : 'Reject Driver'}
                 </button>
+
+                {rideStarted && (
+        <button
+          onClick={() => navigate(`/ride-tracking/${deliveryId}`)}
+          className="mt-2 py-2 bg-blue-600 text-white rounded-lg w-full"
+        >
+          Track Ride
+        </button>
+      )}
               </div>
             </div>
           </div>
@@ -783,7 +840,7 @@ function Ride() {
               >
                 <option value="">Select Payment Method</option>
                 <option value="cash">Cash</option>
-                <option value="card">Card</option>
+                <option value="transfer">Transfer</option>
               </select>
             </div>
 

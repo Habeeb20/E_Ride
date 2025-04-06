@@ -38,6 +38,7 @@ import { FaArrowLeft, FaArrowRight } from "react-icons/fa"; // Import arrow icon
 import Fare from "../Fare";
 import Ride from "./Ride";
 import RideHistory from "./RideHistory";
+import RideTracking from "./RideTracking";
 
 
 // Inside your Dashboard component:
@@ -706,7 +707,7 @@ const Dashboard = () => {
   const sidebarItems = [
     { id: "bookRide", label: "Book a Ride", icon: FaCar },
     { id: "suggestions", label: "Suggestions", icon: FaCar },
-    { id: "city", label: "City to City", icon: FaRoute },
+    { id: "city", label: "Track ride", icon: FaRoute },
     { id: "freight", label: "Freight", icon: FaTruck },
     { id: "safety", label: "Safety", icon: FaShieldAlt },
     { id: "rides", label: "Rides", icon: FaRoute },
@@ -970,9 +971,8 @@ const Dashboard = () => {
             )}
 
             {activeTab === "city" && (
-              <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-lg max-w-lg mx-auto">
-                <h3 className="text-xl font-semibold mb-4">Want to travel from one city to another?</h3>
-                <p className="text-gray-600">No ride history available yet.</p>
+              <div className="">
+                  <RideTracking />
               </div>
             )}
 

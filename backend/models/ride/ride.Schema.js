@@ -27,7 +27,7 @@ const rideSchema = new mongoose.Schema({
   passengerNum:{type:Number, required: false},
   distance: { type: Number, required: true },
   rideOption: { type: String, enum: ["economy", "premium", "shared"], default: "economy" },
-  paymentMethod: { type: String, enum: ["cash", "card"], required: true },
+  paymentMethod: { type: String, enum: ["cash", "transfer"], required: true },
   interestedDrivers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Profile' }],
   status: {
     type: String,
