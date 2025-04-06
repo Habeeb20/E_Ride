@@ -25,9 +25,10 @@ function ViewAvailableRides() {
   const [theme, setTheme] = useState('light');
   const [currentLocation, setCurrentLocation] = useState(null);
   const embedApiKey = import.meta.env.VITE_EMBED_API_KEY;
-  const token = localStorage.getItem("token");
+  // const token = localStorage.getItem("token");
 
   const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
+  const token = localStorage.getItem("token")
 
   // Fetch current location
   useEffect(() => {
@@ -46,60 +47,60 @@ function ViewAvailableRides() {
   }, []);
 
 
-    // Socket.io setup for real-time notifications
-    useEffect(() => {
-      if (!token) return;
-  
-      socket.connect();
-      socket.on('connect', () => console.log('Socket connected:', socket.id));
-  
-      // Join driver-specific room and general ride updates
-      const driverId = localStorage.getItem('token');
-      if (driverId) {
-        socket.emit('join', driverId);
-        console.log('Driver joined room:', driverId);
-      }
-  
-      // Real-time available rides
-      socket.on('newRideAvailable', (ride) => {
-        console.log('New ride available:', ride);
-        setAvailableRides((prev) => {
-          if (!prev.some((r) => r._id === ride._id)) return [...prev, ride];
-          return prev;
-        });
-        toast.info('New ride available!', { style: { background: '#2196F3', color: 'white' } });
+  // Socket.io setup for real-time notifications
+  useEffect(() => {
+    if (!token) return;
+
+    socket.connect();
+    socket.on('connect', () => console.log('Socket connected:', socket.id));
+
+    // Join driver-specific room and general ride updates
+    const driverId = localStorage.getItem('token');
+    if (driverId) {
+      socket.emit('join', driverId);
+      console.log('Driver joined room:', driverId);
+    }
+
+    // Real-time available rides
+    socket.on('newRideAvailable', (ride) => {
+      console.log('New ride available:', ride);
+      setAvailableRides((prev) => {
+        if (!prev.some((r) => r._id === ride._id)) return [...prev, ride];
+        return prev;
       });
-      socket.on('rideAccepted', (data) => {
-        console.log('Ride accepted:', data);
-        setNotifications((prev) => [
-          ...prev,
-          { rideId: data.rideId, status: 'accepted', passengerId: data.passengerId, timestamp: new Date() },
-        ]);
-        toast.success('A passenger has accepted your ride!', { style: { background: '#4CAF50', color: 'white' } });
-      });
-  
-      socket.on('driverRejected', (data) => {
-        console.log('Driver rejected:', data);
-        setNotifications((prev) => [
-          ...prev,
-          { rideId: data.rideId, status: 'rejected', timestamp: new Date() },
-        ]);
-        setAvailableRides((prev) => prev.filter((r) => r._id !== data.rideId));
-        toast.info('Your ride offer was rejected', { style: { background: '#2196F3', color: 'white' } });
-      });
-  
-      socket.on('rideCancelledByPassenger', (data) => {
-        console.log('Ride cancelled:', data);
-        setNotifications((prev) => [
-          ...prev,
-          { rideId: data.rideId, status: 'cancelled', timestamp: new Date() },
-        ]);
-        toast.info('Ride cancelled by passenger', { style: { background: '#2196F3', color: 'white' } });
-      });
-  
-      return () => socket.disconnect();
-    }, [token, driverDetails]);
-  
+      toast.info('New ride available!', { style: { background: '#2196F3', color: 'white' } });
+    });
+    socket.on('rideAccepted', (data) => {
+      console.log('Ride accepted:', data);
+      setNotifications((prev) => [
+        ...prev,
+        { rideId: data.rideId, status: 'accepted', passengerId: data.passengerId, timestamp: new Date() },
+      ]);
+      toast.success('A passenger has accepted your ride!', { style: { background: '#4CAF50', color: 'white' } });
+    });
+
+    socket.on('driverRejected', (data) => {
+      console.log('Driver rejected:', data);
+      setNotifications((prev) => [
+        ...prev,
+        { rideId: data.rideId, status: 'rejected', timestamp: new Date() },
+      ]);
+      setAvailableRides((prev) => prev.filter((r) => r._id !== data.rideId));
+      toast.info('Your ride offer was rejected', { style: { background: '#2196F3', color: 'white' } });
+    });
+
+    socket.on('rideCancelledByPassenger', (data) => {
+      console.log('Ride cancelled:', data);
+      setNotifications((prev) => [
+        ...prev,
+        { rideId: data.rideId, status: 'cancelled', timestamp: new Date() },
+      ]);
+      toast.info('Ride cancelled by passenger', { style: { background: '#2196F3', color: 'white' } });
+    });
+
+    return () => socket.disconnect();
+  }, [token, driverDetails]);
+
 
   // Fetch driver profile
   useEffect(() => {
@@ -114,7 +115,10 @@ function ViewAvailableRides() {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (response.data.status) {
-          setDriverDetails(response.data);
+          setDriverDetails(response.data.data);
+          console.log(response.data.data)
+          socket.emit('join', response.data.data._id); 
+          console.log('Driver joined room:', response.data.data._id);
           toast.success('Welcome to your driver dashboard', { style: { background: '#4CAF50', color: 'white' } });
         }
       } catch (error) {
@@ -129,6 +133,11 @@ function ViewAvailableRides() {
       }
     };
     fetchDriverProfile();
+
+    return () => {
+      socket.disconnect();
+      console.log('Socket disconnected');
+    }
   }, [navigate]);
 
   // Fetch available rides
@@ -220,17 +229,17 @@ function ViewAvailableRides() {
         { driverPrice: Number(negotiatePrice) },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
+
       toast.success('Price negotiation sent successfully', { style: { background: '#4CAF50', color: 'white' } });
       setShowNegotiateModal(false);
       setNegotiatePrice('');
-      setAvailableRides(prev => prev.map(ride => 
-        ride._id === rideId 
-          ? { 
-              ...ride, 
-              negotiationStatus: 'pending',
-              driverProposedPrice: Number(negotiatePrice)
-            } 
+      setAvailableRides(prev => prev.map(ride =>
+        ride._id === rideId
+          ? {
+            ...ride,
+            negotiationStatus: 'pending',
+            driverProposedPrice: Number(negotiatePrice)
+          }
           : ride
       ));
     } catch (error) {
@@ -258,26 +267,26 @@ function ViewAvailableRides() {
 
 
 
-    const getPassengerMapUrl = (notification) => {
-      const ride = availableRides.find((r) => r._id === notification.rideId) || rideHistory.find((r) => r._id === notification.rideId);
-      return ride && notification.status === 'accepted'
-        ? `https://www.google.com/maps/embed/v1/view?key=${embedApiKey}&center=${ride.pickupCoordinates.lat},${ride.pickupCoordinates.lng}&zoom=15`
-        : '';
-    };
-  
-    const calculateDistance = (notification) => {
-      const ride = availableRides.find((r) => r._id === notification.rideId) || rideHistory.find((r) => r._id === notification.rideId);
-      if (!ride || !currentLocation || !ride.pickupCoordinates) return 'N/A';
-      const R = 6371; // Earth's radius in km
-      const dLat = (ride.pickupCoordinates.lat - currentLocation.lat) * (Math.PI / 180);
-      const dLng = (ride.pickupCoordinates.lng - currentLocation.lng) * (Math.PI / 180);
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(currentLocation.lat * (Math.PI / 180)) * Math.cos(ride.pickupCoordinates.lat * (Math.PI / 180)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return (R * c).toFixed(2); // Distance in km
-    };
-  
+  const getPassengerMapUrl = (notification) => {
+    const ride = availableRides.find((r) => r._id === notification.rideId) || rideHistory.find((r) => r._id === notification.rideId);
+    return ride && notification.status === 'accepted'
+      ? `https://www.google.com/maps/embed/v1/view?key=${embedApiKey}&center=${ride.pickupCoordinates.lat},${ride.pickupCoordinates.lng}&zoom=15`
+      : '';
+  };
+
+  const calculateDistance = (notification) => {
+    const ride = availableRides.find((r) => r._id === notification.rideId) || rideHistory.find((r) => r._id === notification.rideId);
+    if (!ride || !currentLocation || !ride.pickupCoordinates) return 'N/A';
+    const R = 6371; // Earth's radius in km
+    const dLat = (ride.pickupCoordinates.lat - currentLocation.lat) * (Math.PI / 180);
+    const dLng = (ride.pickupCoordinates.lng - currentLocation.lng) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(currentLocation.lat * (Math.PI / 180)) * Math.cos(ride.pickupCoordinates.lat * (Math.PI / 180)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return (R * c).toFixed(2); // Distance in km
+  };
+
   return (
     <div className={`h-full flex flex-col ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-800'}`}>
       {/* Header */}
@@ -294,8 +303,8 @@ function ViewAvailableRides() {
         </button>
       </header>
 
-           {/* Notification Modal */}
-           {showNotificationModal && (
+      {/* Notification Modal */}
+      {showNotificationModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className={`rounded-lg p-6 w-11/12 max-w-md max-h-[80vh] overflow-y-auto ${theme === 'light' ? 'bg-white' : 'bg-gray-700'}`}>
             <div className="flex justify-between items-center mb-4">
@@ -306,34 +315,42 @@ function ViewAvailableRides() {
             </div>
             {notifications.length > 0 ? (
               <ul className="space-y-4">
-                {notifications.map((notification, index) => (
-                  <li key={index} className={`p-4 border rounded-lg ${theme === 'light' ? 'border-gray-200' : 'border-gray-600'}`}>
-                    <p className={`font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
-                      Ride ID: {notification.rideId}
-                    </p>
-                    <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>
-                      Status: {notification.status.charAt(0).toUpperCase() + notification.status.slice(1)}
-                    </p>
-                    <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>
-                      Time: {new Date(notification.timestamp).toLocaleString()}
-                    </p>
-                    {notification.status === 'accepted' && (
-                      <>
-                        <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>
-                          Distance to Passenger: {calculateDistance(notification)} km
-                        </p>
-                        <iframe
-                          width="100%"
-                          height="200"
-                          style={{ border: 0, borderRadius: '8px' }}
-                          src={getPassengerMapUrl(notification)}
-                          allowFullScreen
-                          loading="lazy"
-                        />
-                      </>
-                    )}
-                  </li>
-                ))}
+                {notifications.map((notification, index) => {
+                  const ride = availableRides.find((r) => r._id === notification.rideId) || rideHistory.find((r) => r._id === notification.rideId);
+                  return (
+                    <li key={index} className={`p-4 border rounded-lg ${theme === 'light' ? 'border-gray-200' : 'border-gray-600'}`}>
+                      <p className={`font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Ride ID: {notification.rideId}</p>
+                      <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>
+                        Status: {notification.status.charAt(0).toUpperCase() + notification.status.slice(1)}
+                      </p>
+                      {ride && (
+                        <>
+                          <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Passenger: {ride.userId?.firstName} {ride.userId?.lastName}</p>
+                          <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Email: {ride.passenger?.userEmail}</p>
+                          <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Phone: {ride.passenger?.phoneNumber}</p>
+                        </>
+                      )}
+                      <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Time: {new Date(notification.timestamp).toLocaleString()}</p>
+                      {notification.status === 'accepted' && (
+                        <>
+                          <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Distance to Passenger: {calculateDistance(notification)} km</p>
+                          {ride?.pickupCoordinates ? (
+                            <iframe
+                              width="100%"
+                              height="200"
+                              style={{ border: 0, borderRadius: '8px' }}
+                              src={getPassengerMapUrl(notification)}
+                              allowFullScreen
+                              loading="lazy"
+                            />
+                          ) : (
+                            <p className={theme === 'light' ? 'text-gray-600' : 'text-gray-300'}>Passenger location unavailable</p>
+                          )}
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <p className={theme === 'light' ? 'text-gray-600' : 'text-gray-300'}>No notifications yet.</p>
@@ -348,7 +365,7 @@ function ViewAvailableRides() {
           <div className={`rounded-lg p-6 w-11/12 max-w-md max-h-[80vh] overflow-y-auto ${theme === 'light' ? 'bg-white' : 'bg-gray-700'}`}>
             <button onClick={() => setShowProfile(false)} className={theme === 'light' ? 'text-green-600 mb-4' : 'text-green-400 mb-4'}>Close</button>
             <h2 className={`text-xl font-bold mb-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Profile</h2>
-            <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Name: {driverDetails?.firstName || 'Driver'}</p>
+            <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Name: {driverDetails?.userId?.firstName || 'Driver'}</p>
             <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Email: {driverDetails?.userEmail || 'driver@example.com'}</p>
             <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Phone: {driverDetails?.phoneNumber}</p>
             <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Car: {driverDetails?.carDetails?.model} ({driverDetails?.carDetails?.year})</p>
@@ -440,38 +457,38 @@ function ViewAvailableRides() {
                   className={`p-4 border rounded-lg cursor-pointer ${selectedRide?._id === ride._id ? 'border-green-500' : theme === 'light' ? 'border-gray-200' : 'border-gray-600'}`}
                   onClick={() => handleRideSelect(ride)}
                 >
-                        <div className="flex items-center space-x-4">
-                                  <img
-                                    className="w-16 h-16 rounded-full border-4 border-customGreen shadow-lg object-cover transition-all duration-300 hover:scale-105 hover:shadow-xl hover:border-customGreen-dark"
-                                    src={ride.passenger?.profilePicture || "https://via.placeholder.com/150"}
-                                    alt={`${ride.userId?.firstName} ${ride.userId?.lastName}`}
-                                  />
-                                  <button
-                                    onClick={() =>
-                                      window.open(
-                                        ride.passenger?.profilePicture || "https://via.placeholder.com/150",
-                                        "_blank"
-                                      )
-                                    }
-                                    className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-customPink transition-colors duration-200"
-                                  >
-                                    View
-                                  </button>
-                                </div>
+                  <div className="flex items-center space-x-4">
+                    <img
+                      className="w-16 h-16 rounded-full border-4 border-customGreen shadow-lg object-cover transition-all duration-300 hover:scale-105 hover:shadow-xl hover:border-customGreen-dark"
+                      src={ride.passenger?.profilePicture || "https://via.placeholder.com/150"}
+                      alt={`${ride.userId?.firstName} ${ride.userId?.lastName}`}
+                    />
+                    <button
+                      onClick={() =>
+                        window.open(
+                          ride.passenger?.profilePicture || "https://via.placeholder.com/150",
+                          "_blank"
+                        )
+                      }
+                      className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-customPink transition-colors duration-200"
+                    >
+                      View
+                    </button>
+                  </div>
                   <p className={`font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Ride ID: {ride._id}</p>
                   <p className={`font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Passenger's Full-Name: <span className='text-green-300 font-bold'>{ride.userId?.firstName} {ride.userId?.lastName}</span></p>
                   <p className={`font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Passenger's email: <span className="text-green-300 font-bold">{ride.passenger?.userEmail}</span> </p>
                   <p className={`font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
-      Passenger's Phone Num:{' '}
-      <a
-        href={`tel:${ride.passenger?.phoneNumber}`}
-        className="inline-flex items-center text-green-300 hover:text-green-400 transition-colors"
-        title={`Call ${ride.passenger?.phoneNumber}`}
-      >
-        <FaPhone className="mr-2" /> 
-        <span className="font-bold">{ride.passenger?.phoneNumber || 'N/A'}</span>
-      </a>
-    </p>
+                    Passenger's Phone Num:{' '}
+                    <a
+                      href={`tel:${ride.passenger?.phoneNumber}`}
+                      className="inline-flex items-center text-green-300 hover:text-green-400 transition-colors"
+                      title={`Call ${ride.passenger?.phoneNumber}`}
+                    >
+                      <FaPhone className="mr-2" />
+                      <span className="font-bold">{ride.passenger?.phoneNumber || 'N/A'}</span>
+                    </a>
+                  </p>
                   <p className={theme === 'light' ? 'text-green-700 font-bold' : 'text-white font-bold'}>From: <span className='text-green-300 font-bold'>{ride.pickupAddress}</span> </p>
                   <p className={theme === 'light' ? 'text-green-700 font-bold' : 'text-white font-bold'}>To: <span className='text-green-300 font-bold'>{ride.destinationAddress}</span>  </p>
                   <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Distance: {ride.distance} km</p>
@@ -544,46 +561,6 @@ function ViewAvailableRides() {
 }
 
 export default ViewAvailableRides;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

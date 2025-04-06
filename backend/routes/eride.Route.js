@@ -326,6 +326,145 @@ async function geocodeAddress(address) {
   });
 
 
+
+
+  // erideRouter.post('/:deliveryId/confirm-driver', verifyToken, async (req, res) => {
+  //   const userId = req.user.id;
+  //   const { deliveryId } = req.params;
+  //   const { driverId } = req.body;
+    
+  //   try {
+  //     // Fetch ride with populated driver offers
+  //     const ride = await Ride.findById(deliveryId)
+  //       .populate({
+  //         path: 'driverOffers.driver',
+  //         select: 'firstName lastName profilePicture carDetails rating'
+  //       });
+        
+  //     if (!ride) {
+  //       return res.status(404).json({ error: 'Ride not found' });
+  //     }
+      
+  //     const user = await User.findById(userId);
+  //     if (!user) {
+  //       return res.status(404).json({
+  //         status: false,
+  //         message: 'User not found',
+  //       });
+  //     }
+      
+  //     const passengerProfile = await Profile.findOne({ userId: user._id });
+  //     if (!passengerProfile) {
+  //       return res.status(404).json({
+  //         status: false,
+  //         message: 'Profile not found for this user',
+  //       });
+  //     }
+      
+  //     // Validation checks
+  //     if (ride.passenger.toString() !== passengerProfile._id.toString()) {
+  //       return res.status(403).json({ error: 'You are not authorized to confirm this ride' });
+  //     }
+      
+  //     if (ride.status !== 'pending') {
+  //       return res.status(400).json({ error: 'Ride is not in a pending state' });
+  //     }
+      
+  //     if (!ride.driverOffers || ride.driverOffers.length === 0) {
+  //       return res.status(400).json({ error: 'No driver offers available' });
+  //     }
+      
+  //     // Find the selected driver's offer
+  //     const offer = ride.driverOffers.find((o) => o.driver._id.toString() === driverId);
+  //     if (!offer) {
+  //       return res.status(404).json({ error: 'Driver offer not found' });
+  //     }
+      
+  //     if (ride.driver) {
+  //       return res.status(400).json({ error: 'Driver already assigned' });
+  //     }
+      
+  //     // Update ride details
+  //     ride.driver = driverId;
+  //     ride.status = 'accepted';
+  //     ride.finalPrice = offer.offeredPrice;
+      
+  //     // Update all offers with appropriate status
+  //     offer.status = 'accepted';
+  //     ride.driverOffers
+  //       .filter((o) => o.driver._id.toString() !== driverId)
+  //       .forEach((o) => (o.status = 'rejected'));
+      
+  //     // Save the updated ride
+  //     await ride.save();
+      
+  //     // Prepare driver data for the socket emission
+  //     const driverData = {
+  //       _id: driverId,
+  //       firstName: offer.driver.firstName || 'Driver',
+  //       lastName: offer.driver.lastName || '',
+  //       profilePicture: offer.driver.profilePicture || null,
+  //       carDetails: offer.driver.carDetails || {
+  //         model: 'Vehicle',
+  //         year: 2023,
+  //         plateNumber: 'Unknown',
+  //       },
+  //       distance: offer.estimatedArrivalTime || '5 min',
+  //       driverProposedPrice: offer.offeredPrice,
+  //       rating: offer.driver.rating || '4.5',
+  //     };
+      
+  //     // Socket.io notifications - make sure io is properly defined and accessible
+  //     try {
+  //       // Notify everyone in the ride room
+  //       io.to(`ride-${ride._id.toString()}`).emit('rideConfirmed', {
+  //         rideId: ride._id,
+  //         driver: driverData,
+  //         status: 'accepted',
+  //         finalPrice: ride.finalPrice
+  //       });
+        
+  //       // Notify the specific driver
+  //       io.to(`user-${driverId}`).emit('rideAccepted', {
+  //         rideId: ride._id,
+  //         passengerId: passengerProfile._id,
+  //         pickupCoordinates: ride.pickupCoordinates,
+  //         dropoffCoordinates: ride.dropoffCoordinates,
+  //         pickupLocation: ride.pickupLocation,
+  //         dropoffLocation: ride.dropoffLocation,
+  //         finalPrice: ride.finalPrice
+  //       });
+        
+  //       // Notify other drivers that their offers were rejected
+  //       ride.driverOffers.forEach(offer => {
+  //         if (offer.driver._id.toString() !== driverId) {
+  //           io.to(`user-${offer.driver._id.toString()}`).emit('offerRejected', {
+  //             rideId: ride._id,
+  //             message: 'Your offer was not accepted for this ride'
+  //           });
+  //         }
+  //       });
+        
+  //       console.log('Emitted real-time notifications for ride:', ride._id);
+  //     } catch (socketError) {
+  //       // Log socket error but don't fail the request
+  //       console.error('Socket emission error:', socketError);
+  //     }
+      
+  //     res.status(200).json({
+  //       message: 'Driver confirmed successfully',
+  //       rideId: ride._id,
+  //       driver: driverData,
+  //       finalPrice: ride.finalPrice,
+  //     });
+      
+  //   } catch (error) {
+  //     console.error('Error confirming driver:', error);
+  //     res.status(500).json({ error: 'Failed to confirm driver' });
+  //   }
+  // });
+  
+
   erideRouter.post('/:deliveryId/reject-driver', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { deliveryId } = req.params;
@@ -853,6 +992,13 @@ erideRouter.get("/my-ride-drivers", verifyToken, async (req, res) => {
 
   return erideRouter ;
 }
+
+
+
+
+
+
+
 
 
 
