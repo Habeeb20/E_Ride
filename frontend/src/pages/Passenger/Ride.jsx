@@ -110,9 +110,9 @@ function Ride() {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (response.data.status) {
-          setData(response.data);
-          setPassengerId(response.data._id);
-          setPassenger(response.data);
+          setData(response.data.data);
+          setPassengerId(response.data.data?._id);
+          setPassenger(response.data.data);
           toast.success('Book a ride with ease', { style: { background: '#4CAF50', color: 'white' } });
         }
       } catch (error) {
@@ -549,7 +549,7 @@ function Ride() {
           <div className={`rounded-lg p-6 w-11/12 max-w-md max-h-[80vh] overflow-y-auto ${theme === 'light' ? 'bg-white' : 'bg-gray-700'}`}>
             <button onClick={() => setShowProfile(false)} className={theme === 'light' ? 'text-green-600 mb-4' : 'text-green-400 mb-4'}>Close</button>
             <h2 className={`text-xl font-bold mb-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Profile</h2>
-            <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Name: {passenger?.name || 'James'}</p>
+            <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Name: {passenger.userId?.firstName || 'James'}</p>
             <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Email: {passenger?.userEmail || 'james@example.com'}</p>
             <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Phone: {passenger?.phoneNumber}</p>
             <p className={theme === 'light' ? 'text-gray-800' : 'text-white'}>Location: {passenger?.location?.state}, {passenger?.location?.lga}</p>

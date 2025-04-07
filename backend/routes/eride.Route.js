@@ -296,7 +296,17 @@ async function geocodeAddress(address) {
 
       await ride.save();
 
-      // Fetch driver details for emission
+
+      const passengerData = {
+        _id: passengerProfile._id,
+        firstName: passengerProfile.firstName || 'Passenger Name', 
+        phoneNumber: passengerProfile.phoneNumber || 'N/A', 
+        pickupCoordinates: ride.pickupCoordinates,
+        destinationCoordinates: ride.destinationCoordinates, 
+        rideId: ride._id,
+        status: ride.status,
+      };
+
       const driverData = {
         _id: driverId,
         firstName: offer.driver.firstName || 'Driver Name',
@@ -312,7 +322,8 @@ async function geocodeAddress(address) {
 
       // Notify driver and passenger
       io.to(ride._id.toString()).emit('rideConfirmed', { driver: driverData });
-      io.to(driverId).emit('rideAccepted', { rideId: ride._id, passengerId: passengerProfile._id,    pickupCoordinates: ride.pickupCoordinates, });
+      io.to(driverId).emit('rideAccepted', { passenger: passengerData })
+      // io.to(driverId).emit('rideAccepted', { rideId: ride._id, passengerId: passengerProfile._id,    pickupCoordinates: ride.pickupCoordinates, });
       console.log('Emitted rideConfirmed and rideAccepted:', driverData);
 
       res.status(200).json({
@@ -464,6 +475,74 @@ async function geocodeAddress(address) {
   //   }
   // });
   
+
+
+
+erideRouter.get('/driver/:driverId', verifyToken, async (req, res) => {
+    const { driverId } = req.params;
+  
+    try {
+
+      if (req.user.id !== driverId) {
+        return res.status(403).json({
+          status: false,
+          message: 'Unauthorized: You can only access your own ride history',
+        });
+      }
+ 
+      const rides = await Ride.find({ driver: driverId })
+        .populate('passenger', 'firstName lastName userEmail phoneNumber profilePicture') // Populate passenger details
+        .populate('userId', 'firstName lastName') 
+        .sort({ createdAt: -1 });
+  
+      if (!rides || rides.length === 0) {
+        return res.status(200).json([]); // Return empty array if no rides found
+      }
+  
+      // Format response to match frontend expectations
+      const formattedRides = rides.map((ride) => ({
+        _id: ride._id,
+        pickupAddress: ride.pickupAddress,
+        destinationAddress: ride.destinationAddress,
+        distance: ride.distance || 'N/A',
+        calculatedPrice: ride.calculatedPrice || ride.finalPrice || 0,
+        passengerNum: ride.passengerNum || 1,
+        rideOption: ride.rideOption || 'N/A',
+        paymentMethod: ride.paymentMethod || 'N/A',
+        status: ride.status,
+        createdAt: ride.createdAt,
+        passenger: ride.passenger
+          ? {
+              _id: ride.passenger._id,
+              firstName: ride.passenger.firstName,
+              lastName: ride.passenger.lastName,
+              userEmail: ride.passenger.userEmail,
+              phoneNumber: ride.passenger.phoneNumber,
+              profilePicture: ride.passenger.profilePicture || 'https://via.placeholder.com/150',
+            }
+          : null,
+        userId: ride.userId
+          ? {
+              _id: ride.userId._id,
+              firstName: ride.userId.firstName,
+              lastName: ride.userId.lastName,
+            }
+          : null,
+      }));
+  
+      res.status(200).json(formattedRides);
+    } catch (error) {
+      console.error('Error fetching ride history:', error);
+      res.status(500).json({
+        status: false,
+        message: 'Failed to fetch ride history',
+      });
+    }
+  });
+
+
+
+
 
   erideRouter.post('/:deliveryId/reject-driver', verifyToken, async (req, res) => {
     const userId = req.user.id;
