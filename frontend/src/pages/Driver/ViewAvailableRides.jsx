@@ -21,8 +21,9 @@ function ViewAvailableRides() {
   const [negotiatePrice, setNegotiatePrice] = useState('');
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [acceptedRide, setAcceptedRide] = useState(null); 
   const navigate = useNavigate();
-  const [theme, setTheme] = useState('light');
+  const [theme, setTheme] = useState('dark');
   const [currentLocation, setCurrentLocation] = useState(null);
   const embedApiKey = import.meta.env.VITE_EMBED_API_KEY;
   // const token = localStorage.getItem("token");
@@ -72,25 +73,31 @@ function ViewAvailableRides() {
     });
     socket.on('rideAccepted', (data) => {
       console.log('Ride accepted:', data);
+      const { passenger, rideId } = data;
+
+      // Update notifications with passenger details
       setNotifications((prev) => [
         ...prev,
-        { 
-          rideId, 
-          status: 'accepted', 
+        {
+          rideId,
+          status: 'accepted',
           passenger: {
             _id: passenger._id,
             firstName: passenger.firstName,
             phoneNumber: passenger.phoneNumber,
             pickupCoordinates: passenger.pickupCoordinates,
             destinationCoordinates: passenger.destinationCoordinates,
-          }, 
-          timestamp: new Date() 
+          },
+            timestamp: new Date(),
         },
       ]);
-      const ride = availableRides.find(r => r._id === rideId);
+      const ride = availableRides.find((r) => r._id === rideId);
       if (ride) {
-        setAcceptedRide({ ...ride, passenger });
+        const updatedRide = { ...ride, passenger, status: 'accepted' };
+        setAcceptedRide(updatedRide); // Set the accepted ride
         setAvailableRides((prev) => prev.filter((r) => r._id !== rideId)); // Remove from available rides
+        setSelectedRide(updatedRide); // Update selected ride for map
+        setShowMap(true); // Show the map
       }
 
       toast.success(`Ride accepted by ${passenger.firstName}!`, { style: { background: '#4CAF50', color: 'white' } });
@@ -276,15 +283,15 @@ function ViewAvailableRides() {
 
   const openNegotiateModal = (ride) => {
     setSelectedRide(ride);
-    setNegotiatePrice(ride.calculatedPrice?.toString() || ''); // Pre-fill with calculated price
+    setNegotiatePrice(ride.calculatedPrice?.toString() || ''); 
     setShowNegotiateModal(true);
   };
 
-  const mapUrl = showMap && selectedRide
+  const mapUrl = acceptedRide && acceptedRide.passenger?.pickupCoordinates
+    ? `https://www.google.com/maps/embed/v1/directions?key=${embedApiKey}&origin=${currentLocation?.lat},${currentLocation?.lng}&destination=${acceptedRide.passenger.pickupCoordinates.lat},${acceptedRide.passenger.pickupCoordinates.lng}&mode=driving`
+    : showMap && selectedRide
     ? `https://www.google.com/maps/embed/v1/directions?key=${embedApiKey}&origin=${encodeURIComponent(selectedRide.pickupAddress)}&destination=${encodeURIComponent(selectedRide.destinationAddress)}&mode=driving`
     : `https://www.google.com/maps/embed/v1/view?key=${embedApiKey}&center=${currentLocation?.lat},${currentLocation?.lng}&zoom=15`;
-
-
 
   const getPassengerMapUrl = (notification) => {
     const ride = availableRides.find((r) => r._id === notification.rideId) || rideHistory.find((r) => r._id === notification.rideId);
@@ -523,6 +530,7 @@ function ViewAvailableRides() {
                   )}
                   <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Ride Option: {ride.rideOption}</p>
                   <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Payment Method: {ride.paymentMethod}</p>
+                  <p className={theme === 'light' ? 'text-gray-700' : 'text-gray-300'}>Date: {new Date(ride.createdAt).toLocaleDateString()}</p>
 
                   <div className="flex space-x-2 mt-2">
                     <button
@@ -580,6 +588,56 @@ function ViewAvailableRides() {
 }
 
 export default ViewAvailableRides;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

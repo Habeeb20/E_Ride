@@ -702,6 +702,92 @@ erideRouter.get('/driver/:driverId', verifyToken, async (req, res) => {
 
 
 
+  ///as  a driver, see my accepted rides
+
+
+
+erideRouter.get('/driver/accepted/:driverId', verifyToken, async (req, res) => {
+  const { driverId } = req.params;
+  const userId = req.user.id; 
+
+  try {
+  
+    const userProfile = await Profile.findOne({ userId });
+    if (!userProfile) {
+      return res.status(404).json({
+        status: false,
+        message: 'User profile not found',
+      });
+    }
+
+
+    if (userProfile._id.toString() !== driverId) {
+      return res.status(403).json({
+        status: false,
+        message: 'Unauthorized: You can only view your own accepted rides',
+      });
+    }
+
+
+    const acceptedRides = await Ride.find({
+      driver: userProfile._id,
+      status: 'accepted',
+    })
+      .populate('passenger', 'firstName lastName userEmail phoneNumber profilePicture')
+      .populate('userId', 'firstName lastName')
+      .sort({ createdAt: -1 }); // Most recent first
+
+    if (!acceptedRides || acceptedRides.length === 0) {
+      return res.status(200).json([]);
+    }
+
+ 
+    const formattedRides = acceptedRides.map((ride) => ({
+      _id: ride._id,
+      pickupAddress: ride.pickupAddress,
+      destinationAddress: ride.destinationAddress,
+      pickupCoordinates: ride.pickupCoordinates,
+      destinationCoordinates: ride.destinationCoordinates,
+      distance: ride.distance || 'N/A',
+      calculatedPrice: ride.calculatedPrice || ride.finalPrice || 0,
+      passengerNum: ride.passengerNum || 1,
+      rideOption: ride.rideOption || 'N/A',
+      paymentMethod: ride.paymentMethod || 'N/A',
+      status: ride.status,
+      createdAt: ride.createdAt,
+      passenger: ride.passenger
+        ? {
+            _id: ride.passenger._id,
+            firstName: ride.passenger.firstName,
+            lastName: ride.passenger.lastName,
+            userEmail: ride.passenger.userEmail,
+            phoneNumber: ride.passenger.phoneNumber,
+            profilePicture: ride.passenger.profilePicture || 'https://via.placeholder.com/150',
+          }
+        : null,
+      userId: ride.userId
+        ? {
+            _id: ride.userId._id,
+            firstName: ride.userId.firstName,
+            lastName: ride.userId.lastName,
+          }
+        : null,
+    }));
+
+    res.status(200).json(formattedRides);
+  } catch (error) {
+    console.error('Error fetching accepted rides:', error);
+    res.status(500).json({
+      status: false,
+      message: 'Failed to fetch accepted rides',
+    });
+  }
+});
+
+
+
+
+
 
 erideRouter.post('/:rideId/update-location', verifyToken, async (req, res) => {
   const { rideId } = req.params;

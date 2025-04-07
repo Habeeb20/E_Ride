@@ -34,7 +34,8 @@ import axios from "axios";
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa";
 // import DriverFare from "./DriverFare";
 import ViewAvailableRides from "./viewAvailableRides";
-import RideAcceptedNotification from "./RideAcceptedNotification";
+import AcceptedRide from "./AcceptedRide";
+
 
 const DriverDashboard = () => {
   const sliderRef = useRef(null);
@@ -1278,7 +1279,7 @@ const token = localStorage.getItem("token")
             )}
 
             {activeTab === "city"  && (
-              <RideAcceptedNotification />
+             <AcceptedRide />
             )}
 
 
