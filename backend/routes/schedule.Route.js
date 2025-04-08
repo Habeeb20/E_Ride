@@ -6,8 +6,10 @@ import dotenv from "dotenv";
 import Profile from "../models/auth/profileSchema.js";
 import User from "../models/auth/authSchema.js";
 import { verifyToken } from "../middleware/verifyToken.js";
-import Schedule from "../models/trip/schedule.js"; // Only one import needed, removed duplicate
+import Schedule from "../models/trip/schedule.js";
 import Chat from "../models/trip/chat.js";
+import axios from "axios";
+
 dotenv.config();
 
 cloudinary.config({
@@ -18,172 +20,116 @@ cloudinary.config({
 
 const ScheduleRoute = express.Router();
 
-
-// POST /postschedule
-ScheduleRoute.post("/postschedule", verifyToken, async (req, res) => {
-  const id = req.user.id;
-  const { time, date, state, lga, address, priceRange, description, recurrence, duration, pickUp } = req.body;
+// **POST /postschedule** - Passenger creates a new schedule
+ScheduleRoute.post('/postschedule', verifyToken, async (req, res) => {
+  const {
+    pickUp,
+    address,
+    time,
+    date,
+    state,
+    lga,
+    priceRange,
+    distance,
+    calculatedFare,
+  } = req.body;
+  const customerId = req.user.id;
 
   try {
-    // Validate required fields
-    if (!time || !date || !state || !lga || !address || !priceRange || !pickUp || !priceRange.min || !priceRange.max) {
-      return res.status(400).json({
-        status: false,
-        message: "All fields (time, date, state, lga, address, priceRange.min, priceRange.max) are required",
-      });
+    const customer = await User.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({ status: false, message: 'Customer not found' });
     }
 
-    const user = await User.findById(id);
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    const profile = await Profile.findOne({ userId: user._id });
-    if (!profile) {
-      return res.status(404).json({
-        status: false,
-        message: "Profile not found",
-      });
+    const customerProfile = await Profile.findOne({ userId: customerId });
+    if (!customerProfile) {
+      return res.status(404).json({ status: false, message: 'Customer profile not found' });
     }
 
     const schedule = new Schedule({
-      userId: user._id,
-      profileId: profile._id,
+      pickUp,
+      address,
       time,
       date,
-      pickUp,
       state,
       lga,
-      address,
-      priceRange: {
-        min: priceRange.min,
-        max: priceRange.max,
-      },
-      description: description || undefined,
-      recurrence: recurrence || "none",
-      duration: duration || 60,
-      createdBy: user._id,
-      updatedBy: null,
+      priceRange,
+      customerId,
+      customerProfileId: customerProfile._id,
+      distance,
+      calculatedFare,
     });
 
-    await schedule.save();
+    const savedSchedule = await schedule.save();
     return res.status(201).json({
       status: true,
-      message: "Successfully scheduled",
-      data: schedule,
+      message: 'Schedule created successfully',
+      data: savedSchedule,
     });
   } catch (error) {
-    console.error("Error in /postschedule:", error);
+    console.error('Error in /postschedule:', error);
     return res.status(500).json({
       status: false,
-      message: "An error occurred with the server",
+      message: 'An error occurred',
       error: error.message,
     });
   }
 });
 
-// POST /respondtoschedule/:scheduleId (For drivers to respond)
+// **POST /respondtoschedule/:scheduleId** - Driver responds to a schedule
 ScheduleRoute.post("/respondtoschedule/:scheduleId", verifyToken, async (req, res) => {
   const driverId = req.user.id;
   const { scheduleId } = req.params;
   const { status, negotiatedPrice } = req.body;
 
   try {
-    // Find the schedule
-    const schedule = await Schedule.findOne({ _id: scheduleId, isDeleted: false });
-    if (!schedule) {
-      return res.status(404).json({ status: false, message: "Schedule not found" });
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule || schedule.status !== "pending") {
+      return res.status(404).json({ status: false, message: "Schedule not available" });
     }
 
-    // Check if the schedule is still available for response
-    if (schedule.status !== "pending" || schedule.driverResponse.status !== "pending") {
-      return res.status(400).json({ status: false, message: "Schedule is no longer available for response" });
-    }
-
-    // Find the driver and check their role
     const driver = await User.findById(driverId);
-    if (!driver) {
-      return res.status(404).json({ status: false, message: "Driver not found" });
+    if (!driver || driver.role !== "driver") {
+      return res.status(403).json({ status: false, message: "Unauthorized: Only drivers can respond" });
     }
 
-    const isDriver = driver.role === "driver";
-    const isPassengerWithCar = driver.role === "passenger" && (await OwnAcar.findOne({ userId: driverId }));
-
-    // Corrected authorization logic
-    if (isDriver ||  isPassengerWithCar) {
-      return res.status(403).json({
-        status: false,
-        message: "Only drivers or passengers with registered cars can respond to schedules",
-      });
-    }
-
-    // Find the driver's profile
     const driverProfile = await Profile.findOne({ userId: driver._id });
     if (!driverProfile) {
       return res.status(404).json({ status: false, message: "Driver profile not found" });
     }
 
-    // Validate the status
-    if (!status || !["accepted", "negotiated", "rejected"].includes(status)) {
-      return res.status(400).json({
-        status: false,
-        message: "Valid response (accepted, negotiated, rejected) is required",
-      });
+    if (!["accepted", "rejected", "negotiating"].includes(status)) {
+      return res.status(400).json({ status: false, message: "Invalid status. Use 'accepted', 'rejected', or 'negotiating'" });
     }
 
-    // Validate negotiatedPrice for "negotiated" status
-    if (status === "negotiated" && (!negotiatedPrice || negotiatedPrice < 0)) {
-      return res.status(400).json({
-        status: false,
-        message: "Negotiated price is required and must be non-negative",
-      });
+    if (status === "negotiating" && (!negotiatedPrice || negotiatedPrice <= 0)) {
+      return res.status(400).json({ status: false, message: "Negotiated price must be provided and positive" });
     }
 
-    // Update driver response
+    schedule.driverId = driver._id;
+    schedule.driverProfileId = driverProfile._id;
     schedule.driverResponse = {
-      status: status,
-      negotiatedPrice: status === "negotiated" ? negotiatedPrice : null,
-      driverId: driver._id,
-      driverProfileId: driverProfile._id,
+      status,
+      negotiatedPrice: status === "negotiating" ? negotiatedPrice : null,
     };
 
-    // Update schedule status if accepted
     if (status === "accepted") {
       schedule.status = "confirmed";
-    }
-
-    // Create chat for accepted or negotiated statuses
-    if (status === "accepted" || status === "negotiated") {
-      const chat = new Chat({
-        scheduleId,
-        participants: [schedule.profileId, driverProfile._id],
-        messages: [],
-      });
+      const chat = new Chat({ scheduleId, participants: [schedule.customerId, driver._id] });
       await chat.save();
       schedule.chatId = chat._id;
+
+      global.io.to(schedule.customerId.toString()).emit("driverResponse", {
+        scheduleId,
+        driverResponse: schedule.driverResponse,
+      });
     }
 
-    // Set updatedBy
-    schedule.updatedBy = driver._id;
     await schedule.save();
-
-    // Populate the schedule for the response
-    const populatedSchedule = await Schedule.findById(scheduleId)
-      .populate("userId", "firstName lastName email phoneNumber profilePicture")
-      .populate("profileId", "profilePicture phoneNumber") // Corrected typo
-      .populate("driverResponse.driverId", "firstName lastName email profilePicture") // Removed phoneNumber
-      .populate(
-        "driverResponse.driverProfileId",
-        "role profilePicture carDetails.model carDetails.product carDetails.year carDetails.color carDetails.plateNumber carPicture phoneNumber location.lga location.state"
-      ); // Corrected CarPicture to carPicture
-
     return res.status(200).json({
       status: true,
       message: `Schedule ${status} successfully`,
-      schedule: populatedSchedule,
+      schedule,
     });
   } catch (error) {
     console.error("Error in /respondtoschedule:", error);
@@ -195,47 +141,105 @@ ScheduleRoute.post("/respondtoschedule/:scheduleId", verifyToken, async (req, re
   }
 });
 
+ScheduleRoute.post('/calculate-fare', verifyToken, async (req, res) => {
+  const { pickupAddress, destinationAddress } = req.body;
+
+  try {
+
+    const distance = '5.2'; 
+    const fare = 1000 + parseFloat(distance) * 100; 
+
+    return res.status(200).json({
+      distance, // e.g., "5.2"
+      fare,     // e.g., 1520
+    });
+  } catch (error) {
+    console.error('Error in /calculate-fare:', error);
+    return res.status(500).json({
+      status: false,
+      message: 'Failed to calculate fare',
+      error: error.message,
+    });
+  }
+});
+
+// **GET /allschedules** - Drivers view available schedules
+ScheduleRoute.get('/allschedules', verifyToken, async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+  
+    const user = await Profile.findOne({userId});
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: 'User not found',
+      });
+    }
+    
+const profileId = user._id
+
+    const isDriver = user.role === 'driver';
+    let hasCar = false;
+    if (!isDriver) {
+      hasCar = await OwnAcar.findOne({ profileId });
+    }
+
+    if (!isDriver && !hasCar) {
+      return res.status(403).json({
+        status: false,
+        message: 'Unauthorized: Only drivers or passengers with a registered car can view available schedules',
+      });
+    }
+
+    // Fetch pending schedules
+    const schedules = await Schedule.find({ status: 'pending', isDeleted: false })
+      .populate('customerId', 'firstName lastName email')
+      .populate('customerProfileId', 'phoneNumber profilePicture');
+
+    if (schedules.length > 0) {
+      const firstSchedule = schedules[0];
+      if (!firstSchedule.customerId || !firstSchedule.customerProfileId) {
+        console.warn('Population failed for some fields:', {
+          schedule: firstSchedule,
+          customerIdPopulated: !!firstSchedule.customerId,
+          customerProfileIdPopulated: !!firstSchedule.customerProfileId,
+        });
+      }
+    }
+
+    console.log(schedules)
+    return res.status(200).json({
+      status: true,
+      message: 'All available schedules',
+      schedules,
+    });
+  } catch (error) {
+    console.error('Error in /allschedules:', error);
+    return res.status(500).json({
+      status: false,
+      message: 'An error occurred',
+      error: error.message,
+    });
+  }
+});
 
 
 
-// GET /getmyschedules (Updated to include driver details)
+
+
+// **GET /getmyschedules** - Passenger views their schedules
 ScheduleRoute.get("/getmyschedules", verifyToken, async (req, res) => {
   const id = req.user.id;
 
   try {
-    const user = await User.findById(id);
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    const profile = await Profile.findOne({ userId: user._id });
-    if (!profile) {
-      return res.status(404).json({
-        status: false,
-        message: "Profile not found",
-      });
-    }
-
-    const schedules = await Schedule.find({ profileId: profile._id, isDeleted: false })
-      .populate("driverResponse.driverId", "firstName lastName email phoneNumber") // Populate driver details from Auth
-      .populate("driverResponse.driverProfileId", "role profilePicture carDetails.model carDetails.product carDetails.year carDetails.color carDetails.plateNumber  phoneNumber carPicture location.lga location.state")
-
-
-    if (!schedules.length) {
-      return res.status(200).json({
-        status: true,
-        message: "No schedules found",
-        schedules: [],
-      });
-    }
-
+    const schedules = await Schedule.find({ customerId: id, isDeleted: false })
+      .populate("driverId", "firstName lastName email")
+      .populate("driverProfileId", "phoneNumber carDetails");
 
     return res.status(200).json({
       status: true,
-      message: "Your schedules",
+      message: schedules.length ? "Your schedules" : "No schedules found",
       schedules,
     });
   } catch (error) {
@@ -248,56 +252,13 @@ ScheduleRoute.get("/getmyschedules", verifyToken, async (req, res) => {
   }
 });
 
-// GET /allschedules (For drivers to see available schedules)
-// ScheduleRoute.get("/allschedules", verifyToken, async (req, res) => {
-//   try {
-//     const schedules = await Schedule.find({
-//       isDeleted: false,
-//       "driverResponse.status": "pending", 
-//     }).populate("userId", "firstName lastName email ")
-//       .populate("profileId", "profilePicture location.state phoneNumber")
-//       .populate("driverResponse.driverId", "firstName lastName email phoneNumber");
-
-
-
-//     return res.status(200).json({
-//       status: true,
-//       message: "All available schedules",
-//       schedules,
-//     });
-//   } catch (error) {
-//     console.error("Error in /allschedules:", error);
-//     return res.status(500).json({
-//       status: false,
-//       message: "An error occurred",
-//       error: error.message,
-//     });
-//   }
-// });
-
-
-
-
+// **GET /allschedules** - Drivers view available schedules
 ScheduleRoute.get("/allschedules", verifyToken, async (req, res) => {
-  const { state, lga } = req.query;
   try {
-    // Build the filter object
-    const filter = {
-      isDeleted: false, // Only include non-deleted schedules
-      "driverResponse.status": { $in: ["pending", "rejected"] }, // Include schedules with pending or canceled driver response
-    };
+    const schedules = await Schedule.find({ status: "pending", isDeleted: false })
+      .populate("customerId", "firstName lastName email")
+      // .populate("profileId", "phoneNumber profilePicture");
 
-    // Add state and lga to filter if provided
-    // if (state) filter.state = state;
-    // if (lga) filter.lga = lga;
-
-    // Fetch schedules with the filter
-    const schedules = await Schedule.find()
-      .populate("userId", "firstName lastName email")
-      .populate("profileId", "profilePicture location.state phoneNumber")
-      .populate("driverResponse.driverId", "firstName lastName email phoneNumber");
-
-      console.log(schedules)
     return res.status(200).json({
       status: true,
       message: "All available schedules",
@@ -313,97 +274,29 @@ ScheduleRoute.get("/allschedules", verifyToken, async (req, res) => {
   }
 });
 
-///for the driver, get the schedules that i have  accepted
-
+// **GET /myAcceptedSchedule** - Driver views accepted/negotiated schedules
 ScheduleRoute.get("/myAcceptedSchedule", verifyToken, async (req, res) => {
-  const userId = req.user.id;
+  const driverId = req.user.id;
 
   try {
-
-    const user = await Profile.findOne({ userId });
-    if (!user) {
-      return res.status(404).json({
-        message: "Profile details not found",
-        status: false,
-      });
-    }
-
-    const myProfileId = user._id;
-
     const schedules = await Schedule.find({
-   "driverResponse.driverId": userId,
-      $or: [
-        { "driverResponse.status": "accepted" }, 
-        { "driverResponse.status": "negotiated" }, 
-      ],
-    }).populate("userId", "firstName lastName email")
-      .populate("profileId", "phoneNumber, profilePicture ");
-
-    // If no schedules are found
-    if (!schedules || schedules.length === 0) {
-      return res.status(404).json({
-        message: "No accepted or negotiated schedules found",
-        status: false,
-      });
-    }
-
-    // Return the found schedules
-    return res.status(200).json({
-      status: true,
-      message: "Accepted and negotiated schedules retrieved successfully",
-      schedules: schedules,
-    });
-  } catch (error) {
-    console.log(error);
-    return res.status(500).json({
-      status: false,
-      message: "An error occurred on the server",
-    });
-  }
-});
-// GET /schedules/by-state/:state
-ScheduleRoute.get("/schedules/by-state/:state", verifyToken, async (req, res) => {
-  const id = req.user.id;
-  const { state } = req.params;
-
-  try {
-    const user = await User.findById(id);
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    const profile = await Profile.findOne({ userId: user._id });
-    if (!profile) {
-      return res.status(404).json({
-        status: false,
-        message: "Profile not found",
-      });
-    }
-
-    const schedules = await Schedule.find({
-      profileId: profile._id,
-      state: { $regex: new RegExp(state, "i") }, // Case-insensitive match
-      isDeleted: false, // Exclude soft-deleted schedules
-    });
+      driverId,
+      "driverResponse.status": { $in: ["accepted", "negotiating"] },
+    })
+      .populate("customerId", "firstName lastName email")
+      .populate("profileId", "phoneNumber profilePicture");
 
     if (!schedules.length) {
-      return res.status(200).json({
-        status: true,
-        message: `No schedules found for state: ${state}`,
-        schedules: [],
-      });
+      return res.status(404).json({ status: false, message: "No accepted or negotiated schedules found" });
     }
 
     return res.status(200).json({
       status: true,
-      message: `Schedules for state: ${state}`,
+      message: "Accepted and negotiated schedules",
       schedules,
     });
   } catch (error) {
-    console.error("Error in /schedules/by-state:", error);
+    console.error("Error in /myAcceptedSchedule:", error);
     return res.status(500).json({
       status: false,
       message: "An error occurred",
@@ -412,241 +305,147 @@ ScheduleRoute.get("/schedules/by-state/:state", verifyToken, async (req, res) =>
   }
 });
 
-// GET /schedules/by-lga/:lga
-ScheduleRoute.get("/schedules/by-lga/:lga", verifyToken, async (req, res) => {
-  const id = req.user.id;
-  const { lga } = req.params;
-
-  try {
-    const user = await User.findById(id);
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    const profile = await Profile.findOne({ userId: user._id });
-    if (!profile) {
-      return res.status(404).json({
-        status: false,
-        message: "Profile not found",
-      });
-    }
-
-    const schedules = await Schedule.find({
-      profileId: profile._id,
-      lga: { $regex: new RegExp(lga, "i") }, // Changed from LGA to lga
-      isDeleted: false, // Exclude soft-deleted schedules
-    });
-
-    if (!schedules.length) {
-      return res.status(200).json({
-        status: true,
-        message: `No schedules found for LGA: ${lga}`,
-        schedules: [],
-      });
-    }
-
-    return res.status(200).json({
-      status: true,
-      message: `Schedules for LGA: ${lga}`,
-      schedules,
-    });
-  } catch (error) {
-    console.error("Error in /schedules/by-lga:", error);
-    return res.status(500).json({
-      status: false,
-      message: "An error occurred",
-      error: error.message,
-    });
-  }
-});
-
-// GET /schedules/by-state-and-lga/:state/:lga
-ScheduleRoute.get("/schedules/by-state-and-lga/:state/:lga", verifyToken, async (req, res) => {
-  const id = req.user.id;
-  const { state, lga } = req.params;
-
-  try {
-    const user = await User.findById(id);
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    const profile = await Profile.findOne({ userId: user._id });
-    if (!profile) {
-      return res.status(404).json({
-        status: false,
-        message: "Profile not found",
-      });
-    }
-
-    const schedules = await Schedule.find({
-      profileId: profile._id,
-      state: { $regex: new RegExp(state, "i") }, // Case-insensitive match
-      lga: { $regex: new RegExp(lga, "i") }, // Changed from LGA to lga
-      isDeleted: false, // Exclude soft-deleted schedules
-    });
-
-    if (!schedules.length) {
-      return res.status(200).json({
-        status: true,
-        message: `No schedules found for state: ${state} and LGA: ${lga}`,
-        schedules: [],
-      });
-    }
-
-    return res.status(200).json({
-      status: true,
-      message: `Schedules for state: ${state} and LGA: ${lga}`,
-      schedules,
-    });
-  } catch (error) {
-    console.error("Error in /schedules/by-state-and-lga:", error);
-    return res.status(500).json({
-      status: false,
-      message: "An error occurred",
-      error: error.message,
-    });
-  }
-});
-
-
-
+// **PUT /updateschedule/:id** - Update a schedule
 ScheduleRoute.put("/updateschedule/:id", verifyToken, async (req, res) => {
-    const id = req.user.id;
-    const scheduleId = req.params.id;
-    const updates = req.body;
-  
-    try {
-      const user = await User.findById(id);
-      if (!user) return res.status(404).json({ status: false, message: "User not found" });
-  
-      const schedule = await Schedule.findOne({ _id: scheduleId, userId: id, isDeleted: false });
-      if (!schedule) return res.status(404).json({ status: false, message: "Schedule not found" });
-  
-      Object.assign(schedule, updates, { updatedBy: id });
-      await schedule.save();
-  
-      return res.status(200).json({ status: true, message: "Schedule updated", data: schedule });
-    } catch (error) {
-      console.error("Error in /updateschedule:", error);
-      return res.status(500).json({ status: false, message: "An error occurred", error: error.message });
-    }
-  });
+  const id = req.user.id;
+  const scheduleId = req.params.id;
+  const updates = req.body;
 
+  try {
+    const schedule = await Schedule.findOne({ _id: scheduleId, customerId: id, isDeleted: false });
+    if (!schedule) return res.status(404).json({ status: false, message: "Schedule not found or unauthorized" });
 
+    Object.assign(schedule, updates, { updatedBy: id });
+    await schedule.save();
 
+    return res.status(200).json({ status: true, message: "Schedule updated", data: schedule });
+  } catch (error) {
+    console.error("Error in /updateschedule:", error);
+    return res.status(500).json({
+      status: false,
+      message: "An error occurred",
+      error: error.message,
+    });
+  }
+});
 
-  ScheduleRoute.delete("/deleteschedule/:id", verifyToken, async (req, res) => {
-    const id = req.user.id;
-    const scheduleId = req.params.id;
-  
-    try {
-      const user = await User.findById(id);
-      if (!user) return res.status(404).json({ status: false, message: "User not found" });
-  
-      const schedule = await Schedule.findOneAndUpdate(
-        { _id: scheduleId, userId: id, isDeleted: false },
-        { isDeleted: true, updatedBy: id },
-        { new: true }
-      );
-      if (!schedule) return res.status(404).json({ status: false, message: "Schedule not found" });
-  
-      return res.status(200).json({ status: true, message: "Schedule deleted" });
-    } catch (error) {
-      console.error("Error in /deleteschedule:", error);
-      return res.status(500).json({ status: false, message: "An error occurred", error: error.message });
-    }
-  });
+// **DELETE /deleteschedule/:id** - Soft delete a schedule
+ScheduleRoute.delete("/deleteschedule/:id", verifyToken, async (req, res) => {
+  const id = req.user.id;
+  const scheduleId = req.params.id;
 
+  try {
+    const schedule = await Schedule.findOneAndUpdate(
+      { _id: scheduleId, customerId: id, isDeleted: false },
+      { isDeleted: true, updatedBy: id },
+      { new: true }
+    );
+    if (!schedule) return res.status(404).json({ status: false, message: "Schedule not found or unauthorized" });
 
+    return res.status(200).json({ status: true, message: "Schedule deleted" });
+  } catch (error) {
+    console.error("Error in /deleteschedule:", error);
+    return res.status(500).json({
+      status: false,
+      message: "An error occurred",
+      error: error.message,
+    });
+  }
+});
 
-  // Get chat messages
+// **GET /chat/:scheduleId** - Get chat messages
 ScheduleRoute.get("/chat/:scheduleId", verifyToken, async (req, res) => {
-  const scheduleId = req.params.scheduleId;
+  const { scheduleId } = req.params;
   const userId = req.user.id;
 
   try {
-    const profile = await Profile.findOne({ userId });
-    const chat = await Chat.findOne({ scheduleId, participants: profile._id }).populate(
+    const chat = await Chat.findOne({ scheduleId, participants: userId }).populate(
       "messages.sender",
       "firstName lastName"
     );
-    if (!chat) {
-      return res.status(404).json({ status: false, message: "Chat not found" });
-    }
+    if (!chat) return res.status(404).json({ status: false, message: "Chat not found" });
 
     return res.status(200).json({ status: true, chat });
   } catch (error) {
-    console.log(error);
+    console.error("Error in /chat/:scheduleId:", error);
     return res.status(500).json({ status: false, message: "Server error" });
   }
 });
 
-// Send a message
+// **POST /chat/send** - Send a chat message
 ScheduleRoute.post("/chat/send", verifyToken, async (req, res) => {
   const { scheduleId, content } = req.body;
   const userId = req.user.id;
 
   try {
-    const profile = await Profile.findOne({ userId });
-    const chat = await Chat.findOne({ scheduleId, participants: profile._id });
-    if (!chat) {
-      return res.status(404).json({ status: false, message: "Chat not found" });
-    }
+    const chat = await Chat.findOne({ scheduleId, participants: userId });
+    if (!chat) return res.status(404).json({ status: false, message: "Chat not found" });
 
-    chat.messages.push({ sender: profile._id, content });
+    const newMessage = { senderId: userId, content, timestamp: new Date() };
+    chat.messages.push(newMessage);
     await chat.save();
+
+    global.io.to(chat.participants.filter(id => id.toString() !== userId.toString())[0].toString()).emit("newMessage", newMessage);
 
     return res.status(200).json({ status: true, message: "Message sent", chat });
   } catch (error) {
-    console.log(error);
+    console.error("Error in /chat/send:", error);
     return res.status(500).json({ status: false, message: "Server error" });
   }
 });
 
+// **POST /calculate-fare** - Calculate fare using Google Maps API
+ScheduleRoute.post("/calculate-fare", async (req, res) => {
+  const { pickupAddress, destinationAddress } = req.body;
 
+  if (!pickupAddress || !destinationAddress) {
+    return res.status(400).json({ status: false, message: "Pickup and destination addresses are required" });
+  }
 
-  
+  try {
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || "YOUR_API_KEY_HERE"; // Use .env file in production
+    const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(pickupAddress)}&destinations=${encodeURIComponent(destinationAddress)}&units=metric&key=${apiKey}`;
+
+    const response = await axios.get(url);
+    const data = response.data;
+
+    if (data.status !== "OK") {
+      return res.status(400).json({
+        status: false,
+        message: `API Error: ${data.status}`,
+        details: data.error_message || "Unknown error",
+      });
+    }
+
+    const element = data.rows[0]?.elements[0];
+    if (!element || element.status !== "OK") {
+      return res.status(400).json({
+        status: false,
+        message: "Unable to calculate distance",
+        details: element?.status || "No route data available",
+      });
+    }
+
+    const distanceInMeters = element.distance.value;
+    const distanceInKm = distanceInMeters / 1000;
+
+    const baseFare = 500;
+    const ratePerKm = 100;
+    const fare = baseFare + distanceInKm * ratePerKm;
+
+    return res.status(200).json({
+      status: true,
+      distance: distanceInKm.toFixed(2),
+      fare: Math.round(fare),
+    });
+  } catch (error) {
+    console.error("Error calculating fare:", error.response?.data || error.message);
+    return res.status(500).json({
+      status: false,
+      message: "An error occurred while calculating fare",
+      error: error.message,
+    });
+  }
+});
+
 export default ScheduleRoute;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

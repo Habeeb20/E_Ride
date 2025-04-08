@@ -67,6 +67,7 @@ app.use("/api/rentals", vehicleRoute(io)  )
 
 // Socket.IO setup
 io.on("connection", (socket) => {
+  socket.on('joinChat', (chatId) => socket.join(chatId));
   console.log("User connected:", socket.id);
 
   socket.on("joinRide", (rideId) => {
