@@ -10,6 +10,7 @@ const rideSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId, ref: "Profile", required: true
    },
   driver: { type: mongoose.Schema.Types.ObjectId, ref: "Profile", required: false },
+  driverId: {type: mongoose.Schema.Types.ObjectId, ref:"Auth", required: false},
   pickupAddress: { type: String, required: true },
   destinationAddress: { type: String, required: true },
   pickupCoordinates: {

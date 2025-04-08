@@ -35,6 +35,7 @@ import { FaArrowLeft, FaArrowRight } from "react-icons/fa";
 // import DriverFare from "./DriverFare";
 import ViewAvailableRides from "./viewAvailableRides";
 import AcceptedRide from "./AcceptedRide";
+import ActiveRide from "./ActiveRide";
 
 
 const DriverDashboard = () => {
@@ -951,134 +952,136 @@ const token = localStorage.getItem("token")
 
 
             {activeTab === "appointments" && (
-              <div className="bg-white bg-opacity-95 p-6 rounded-xl shadow-xl max-w-2xl mx-auto transform transition-all duration-300 hover:shadow-2xl">
-                <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-                  <FaCalendar className="mr-2 text-customGreen" /> My Appointments
-                </h3>
-                {myAcceptedSchedule && myAcceptedSchedule.length > 0 ? (
-                  <div className="space-y-4">
-                    {myAcceptedSchedule.map((schedule) => (
-                      <div key={schedule._id} className="p-4 bg-gray-50 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
-                        <img
-                          className="w-16 h-16 rounded-full border-4 border-customGreen shadow-lg object-cover transition-all duration-300 hover:scale-105 hover:shadow-xl hover:border-customGreen-dark"
-                          src={schedule.profileId?.profilePicture || "https://via.placeholder.com/150"}
-                          alt={`${schedule.profileId?.firstName} ${schedule.profileId?.lastName}`}
-                        />
-                        <button
-                          onClick={() =>
-                            window.open(
-                              schedule.profileId?.profilePicture || "https://via.placeholder.com/150",
-                              "_blank"
-                            )
-                          }
-                          className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors duration-200"
-                        >
-                          View
-                        </button>
-                        <p>
-                          <strong>Full Name:</strong> {schedule.userId.firstName} {schedule.userId.lastName}
-                        </p>
-                        <p>
-                          <strong>Email:</strong> {schedule.userId.email}
-                        </p>
-                        <p>
-                          <strong>phoneNumber:</strong> {schedule.profileId.phoneNumber}
-                        </p>
-                        <p>
-                          <strong>Time:</strong> {schedule.formattedTime}
-                        </p>
-                        <p>
-                          <strong>Location:</strong> {schedule.state}, {schedule.lga}, {schedule.address}
-                        </p>
-                        <p>
-                          <strong>Price Range:</strong> ₦{schedule.priceRange.min} - ₦{schedule.priceRange.max}
-                        </p>
-                        {schedule.driverResponse.status === "negotiated" && (
-                          <p>
-                            <strong>Negotiated Price:</strong> ₦{schedule.driverResponse.negotiatedPrice}
-                          </p>
-                        )}
-                        <p>
-                          <strong>Status:</strong>{" "}
-                          <span
-                            className={
-                              schedule.driverResponse.status === "accepted" ? "text-green-600" : "text-yellow-600"
-                            }
-                          >
-                            {schedule.driverResponse.status}
-                          </span>
-                        </p>
-                        <button
-                          onClick={() => {
-                            setSelectedChatScheduleId(schedule._id);
-                            fetchChatMessages(schedule._id);
-                          }}
-                          className="mt-4 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                        >
-                          Chat with Passenger
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <h4 className="text-gray-600 text-center">You have not accepted any schedule yet</h4>
-                )}
 
-                {selectedChatScheduleId && (
-                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white p-6 rounded-xl shadow-xl max-w-md w-full">
-                      <h3 className="text-xl font-bold text-gray-800 mb-4">Chat with Passenger</h3>
-                      <div className="h-64 overflow-y-auto mb-4 p-2 bg-gray-100 rounded-lg">
-                        {chatMessages[selectedChatScheduleId]?.length > 0 ? (
-                          chatMessages[selectedChatScheduleId].map((msg, index) => (
-                            <div
-                              key={index}
-                              className={`mb-2 ${msg.sender._id === data?.data?.driverProfileId
-                                  ? "text-right text-black font-bold"
-                                  : "text-left text-gray-800 font-semibold"
-                                }`}
-                            >
-                              <p
-                                className={`inline-block p-2 rounded-lg ${msg.sender._id === data?.data?.driverProfileId ? "bg-customPink" : "bg-blue-100"
-                                  }`}
-                              >
-                                {msg.content}
-                              </p>
-                              <p className="text-xs text-gray-500">{new Date(msg.timestamp).toLocaleTimeString()}</p>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-gray-600">No messages yet</p>
-                        )}
-                      </div>
-                      <div className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={chatInput}
-                          onChange={(e) => setChatInput(e.target.value)}
-                          className="flex-1 p-2 border border-gray-300 rounded-lg"
-                          placeholder="Type a message..."
-                        />
-                        <button
-                          onClick={() => sendChatMessage(selectedChatScheduleId)}
-                          className="py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                        >
-                          Send
-                        </button>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setSelectedChatScheduleId(null);
-                          setChatInput("");
-                        }}
-                        className="mt-4 py-2 px-4 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400"
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <ActiveRide />
+              // <div className="bg-white bg-opacity-95 p-6 rounded-xl shadow-xl max-w-2xl mx-auto transform transition-all duration-300 hover:shadow-2xl">
+              //   <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+              //     <FaCalendar className="mr-2 text-customGreen" /> My Appointments
+              //   </h3>
+              //   {myAcceptedSchedule && myAcceptedSchedule.length > 0 ? (
+              //     <div className="space-y-4">
+              //       {myAcceptedSchedule.map((schedule) => (
+              //         <div key={schedule._id} className="p-4 bg-gray-50 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
+              //           <img
+              //             className="w-16 h-16 rounded-full border-4 border-customGreen shadow-lg object-cover transition-all duration-300 hover:scale-105 hover:shadow-xl hover:border-customGreen-dark"
+              //             src={schedule.profileId?.profilePicture || "https://via.placeholder.com/150"}
+              //             alt={`${schedule.profileId?.firstName} ${schedule.profileId?.lastName}`}
+              //           />
+              //           <button
+              //             onClick={() =>
+              //               window.open(
+              //                 schedule.profileId?.profilePicture || "https://via.placeholder.com/150",
+              //                 "_blank"
+              //               )
+              //             }
+              //             className="py-1 px-3 bg-customGreen text-white text-sm font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors duration-200"
+              //           >
+              //             View
+              //           </button>
+              //           <p>
+              //             <strong>Full Name:</strong> {schedule.userId.firstName} {schedule.userId.lastName}
+              //           </p>
+              //           <p>
+              //             <strong>Email:</strong> {schedule.userId.email}
+              //           </p>
+              //           <p>
+              //             <strong>phoneNumber:</strong> {schedule.profileId.phoneNumber}
+              //           </p>
+              //           <p>
+              //             <strong>Time:</strong> {schedule.formattedTime}
+              //           </p>
+              //           <p>
+              //             <strong>Location:</strong> {schedule.state}, {schedule.lga}, {schedule.address}
+              //           </p>
+              //           <p>
+              //             <strong>Price Range:</strong> ₦{schedule.priceRange.min} - ₦{schedule.priceRange.max}
+              //           </p>
+              //           {schedule.driverResponse.status === "negotiated" && (
+              //             <p>
+              //               <strong>Negotiated Price:</strong> ₦{schedule.driverResponse.negotiatedPrice}
+              //             </p>
+              //           )}
+              //           <p>
+              //             <strong>Status:</strong>{" "}
+              //             <span
+              //               className={
+              //                 schedule.driverResponse.status === "accepted" ? "text-green-600" : "text-yellow-600"
+              //               }
+              //             >
+              //               {schedule.driverResponse.status}
+              //             </span>
+              //           </p>
+              //           <button
+              //             onClick={() => {
+              //               setSelectedChatScheduleId(schedule._id);
+              //               fetchChatMessages(schedule._id);
+              //             }}
+              //             className="mt-4 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              //           >
+              //             Chat with Passenger
+              //           </button>
+              //         </div>
+              //       ))}
+              //     </div>
+              //   ) : (
+              //     <h4 className="text-gray-600 text-center">You have not accepted any schedule yet</h4>
+              //   )}
+
+              //   {selectedChatScheduleId && (
+              //     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              //       <div className="bg-white p-6 rounded-xl shadow-xl max-w-md w-full">
+              //         <h3 className="text-xl font-bold text-gray-800 mb-4">Chat with Passenger</h3>
+              //         <div className="h-64 overflow-y-auto mb-4 p-2 bg-gray-100 rounded-lg">
+              //           {chatMessages[selectedChatScheduleId]?.length > 0 ? (
+              //             chatMessages[selectedChatScheduleId].map((msg, index) => (
+              //               <div
+              //                 key={index}
+              //                 className={`mb-2 ${msg.sender._id === data?.data?.driverProfileId
+              //                     ? "text-right text-black font-bold"
+              //                     : "text-left text-gray-800 font-semibold"
+              //                   }`}
+              //               >
+              //                 <p
+              //                   className={`inline-block p-2 rounded-lg ${msg.sender._id === data?.data?.driverProfileId ? "bg-customPink" : "bg-blue-100"
+              //                     }`}
+              //                 >
+              //                   {msg.content}
+              //                 </p>
+              //                 <p className="text-xs text-gray-500">{new Date(msg.timestamp).toLocaleTimeString()}</p>
+              //               </div>
+              //             ))
+              //           ) : (
+              //             <p className="text-gray-600">No messages yet</p>
+              //           )}
+              //         </div>
+              //         <div className="flex space-x-2">
+              //           <input
+              //             type="text"
+              //             value={chatInput}
+              //             onChange={(e) => setChatInput(e.target.value)}
+              //             className="flex-1 p-2 border border-gray-300 rounded-lg"
+              //             placeholder="Type a message..."
+              //           />
+              //           <button
+              //             onClick={() => sendChatMessage(selectedChatScheduleId)}
+              //             className="py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              //           >
+              //             Send
+              //           </button>
+              //         </div>
+              //         <button
+              //           onClick={() => {
+              //             setSelectedChatScheduleId(null);
+              //             setChatInput("");
+              //           }}
+              //           className="mt-4 py-2 px-4 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400"
+              //         >
+              //           Close
+              //         </button>
+              //       </div>
+              //     </div>
+              //   )}
+              // </div>
             )}
 
 

@@ -324,7 +324,11 @@ async function geocodeAddress(address) {
       io.to(ride._id.toString()).emit('rideConfirmed', { driver: driverData });
       io.to(driverId).emit('rideAccepted', { passenger: passengerData })
       // io.to(driverId).emit('rideAccepted', { rideId: ride._id, passengerId: passengerProfile._id,    pickupCoordinates: ride.pickupCoordinates, });
-      console.log('Emitted rideConfirmed and rideAccepted:', driverData);
+      console.log('Emitted rideConfirmed and rideAccepted:', driverData, { passenger: passengerData });
+      io.to(driverId).emit('rideAccepted', { passenger: passengerData });
+
+      
+
 
       res.status(200).json({
         message: 'Driver accepted successfully',
@@ -337,6 +341,23 @@ async function geocodeAddress(address) {
   });
 
 
+
+  erideRouter.get('/passenger/booked', verifyToken, async (req, res) => {
+    try {
+      const profile = await Profile.findOne({ userId: req.user.id });
+      if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
+  
+      const rides = await Ride.find({ passenger: profile._id })
+        .populate('driver', 'carPicture carDetails profilePicture phoneNumber userEmail')
+        .populate('driverId', 'firstName lastName email ')
+        .sort({ createdAt: -1 });
+      console.log(rides)
+      res.json({ success: true, rides });
+    } catch (error) {
+      console.error('Error fetching booked rides:', error);
+      res.status(500).json({ success: false, message: 'Server error' });
+    }
+  });
 
 
   // erideRouter.post('/:deliveryId/confirm-driver', verifyToken, async (req, res) => {
@@ -788,6 +809,50 @@ erideRouter.get('/driver/accepted/:driverId', verifyToken, async (req, res) => {
 
 
 
+erideRouter.put("/:rideId/complete", verifyToken, async (req, res) => {
+  const driverId = req.user.id;
+  const { rideId } = req.params;
+
+  try {
+    const ride = await Ride.findById(rideId);
+    if (!ride || ride.driver.toString() !== driverId || ride.status !== "in_progress") {
+      return res.status(400).json({ error: "Invalid ride or driver" });
+    }
+
+    ride.status = "completed";
+    ride.rideEndTime = new Date();
+    ride.rideDuration = Math.round((ride.rideEndTime - ride.rideStartTime) / 60000); // Duration in minutes
+    await ride.save();
+
+    io.to(rideId).emit("rideCompleted", { rideId, rideDuration: ride.rideDuration });
+    res.status(200).json({ message: "Ride completed", rideDuration: ride.rideDuration });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to complete ride" });
+  }
+});
+
+
+erideRouter.put("/:rideId/start", verifyToken, async (req, res) => {
+  const driverId = req.user.id;
+  const { rideId } = req.params;
+
+  try {
+    const ride = await Ride.findById(rideId);
+    if (!ride || ride.driver.toString() !== driverId || ride.status !== "accepted") {
+      return res.status(400).json({ error: "Invalid ride or driver" });
+    }
+
+    ride.status = "in_progress";
+    ride.rideStartTime = new Date();
+    await ride.save();
+
+    io.to(rideId).emit("rideStarted", { rideId });
+    res.status(200).json({ message: "Ride started" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to start ride" });
+  }
+});
+
 
 erideRouter.post('/:rideId/update-location', verifyToken, async (req, res) => {
   const { rideId } = req.params;
@@ -837,26 +902,6 @@ erideRouter.post('/:rideId/update-location', verifyToken, async (req, res) => {
   }
 );
 
-erideRouter.put("/:rideId/start", verifyToken, async (req, res) => {
-  const driverId = req.user.id;
-  const { rideId } = req.params;
-
-  try {
-    const ride = await Ride.findById(rideId);
-    if (!ride || ride.driver.toString() !== driverId || ride.status !== "accepted") {
-      return res.status(400).json({ error: "Invalid ride or driver" });
-    }
-
-    ride.status = "in_progress";
-    ride.rideStartTime = new Date();
-    await ride.save();
-
-    io.to(rideId).emit("rideStarted", { rideId });
-    res.status(200).json({ message: "Ride started" });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to start ride" });
-  }
-});
 
 erideRouter.get("/my-ride-drivers", verifyToken, async (req, res) => {
   try {
@@ -922,28 +967,6 @@ erideRouter.get("/my-ride-drivers", verifyToken, async (req, res) => {
   }
 });
 
-
-  erideRouter.put("/:rideId/complete", verifyToken, async (req, res) => {
-    const driverId = req.user.id;
-    const { rideId } = req.params;
-
-    try {
-      const ride = await Ride.findById(rideId);
-      if (!ride || ride.driver.toString() !== driverId || ride.status !== "in_progress") {
-        return res.status(400).json({ error: "Invalid ride or driver" });
-      }
-
-      ride.status = "completed";
-      ride.rideEndTime = new Date();
-      ride.rideDuration = Math.round((ride.rideEndTime - ride.rideStartTime) / 60000); // Duration in minutes
-      await ride.save();
-
-      io.to(rideId).emit("rideCompleted", { rideId, rideDuration: ride.rideDuration });
-      res.status(200).json({ message: "Ride completed", rideDuration: ride.rideDuration });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to complete ride" });
-    }
-  });
 
 
   erideRouter.post("/:rideId/rate", verifyToken, async (req, res) => {
@@ -1157,17 +1180,6 @@ erideRouter.get("/my-ride-drivers", verifyToken, async (req, res) => {
 
   return erideRouter ;
 }
-
-
-
-
-
-
-
-
-
-
-
 
 
 

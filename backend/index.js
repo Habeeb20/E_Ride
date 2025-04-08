@@ -19,6 +19,8 @@ import rideRoute from "./routes/fare.Route.js";
 import deliveryRouter from "./routes/delivery.Route.js";
 import ridesRouterWithIO from "./routes/eride.Route.js";
 import erideRouter from "./routes/eride.Route.js";
+import vehicleRoute from "./routes/rental.Route.js";
+
 
 
 dotenv.config();
@@ -60,15 +62,34 @@ app.use("/api/schedule", ScheduleRoute);
 app.use("/api/airport", airportRoute);
 app.use("/api/fare", rideRoute);
 app.use("/api/delivery", deliveryRouter);
-app.use('/api/rides', erideRouter(io)); 
+app.use('/api/rides', erideRouter(io));
+app.use("/api/rentals", vehicleRoute(io)  ) 
 
 // Socket.IO setup
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
   socket.on("joinRide", (rideId) => {
-    socket.join(rideId); // Join ride-specific room
+    socket.join(rideId); 
     console.log(`User ${socket.id} joined ride ${rideId}`);
+  });
+
+
+
+
+  socket.on('joinRental', (rentalId) => {
+    socket.join(rentalId);
+    console.log(`User ${socket.id} joined rental ${rentalId}`);
+  });
+  
+  // Location updates
+  socket.on('locationUpdate', (data) => {
+    io.to(data.rentalId).emit('locationUpdated', data);
+  });
+  
+  // Rental status updates
+  socket.on('rentalStatusUpdate', (data) => {
+    io.to(data.rentalId).emit('statusUpdated', data);
   });
 
   socket.on("disconnect", () => {

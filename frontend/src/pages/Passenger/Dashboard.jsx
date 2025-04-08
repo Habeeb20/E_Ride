@@ -39,6 +39,10 @@ import Fare from "../Fare";
 import Ride from "./Ride";
 import RideHistory from "./RideHistory";
 import RideTracking from "./RideTracking";
+import PassengerRides from "./PassengerRides";
+import RegisterVehicle from "../Vehicle/RegisterVehicle";
+import AvailableVehicles from "../Vehicle/AvailableVehicle";
+import OwnerDashboard from "../Vehicle/OwnerDashboard";
 
 
 // Inside your Dashboard component:
@@ -88,6 +92,8 @@ const Dashboard = () => {
   const [showNegotiationModal, setShowNegotiationModal] = useState(false);
   const [selectedScheduleId, setSelectedScheduleId] = useState(null);
   const [negotiatedPriceInput, setNegotiatedPriceInput] = useState("");
+  const [showLorryModal, setShowLorryModal] = useState(false);
+  const [showPickupModal, setShowPickupModal] = useState(false);
   const [pickup, setPickup] = useState({
     state:"",
     airportName:"",
@@ -709,23 +715,25 @@ const Dashboard = () => {
     { id: "suggestions", label: "Suggestions", icon: FaCar },
     { id: "city", label: "Track ride", icon: FaRoute },
     { id: "freight", label: "Freight", icon: FaTruck },
-    { id: "safety", label: "Safety", icon: FaShieldAlt },
-    { id: "rides", label: "Rides", icon: FaRoute },
+    { id: "safety", label: "My-Rides", icon: FaShieldAlt },
+ 
     { id: "profile", label: "Profile", icon: FaUser },
     { id: "settings", label: "Settings", icon: FaCog },
-    { id: "ownACar", label: "own a car?", icon: FaCar },
+    { id: "ownACar", label: "ride along?", icon: FaCar },
     { id: "schedule", label: "have a schedule?", icon: FaCalendar },
     { id: "bookings", label: "Your Bookings", icon: FaCalendarCheck },
+    { id: "rides", label: "rent your vehicle?", icon: FaRoute },
+    { id: "vehicle", label: "who wants to rent your vehicle?", icon: FaRoute },
   ];
 
   const suggestions = [
 
     { icon: FaPlane, label: "airport pickup", color: "bg-purple-100", onClick: () => setPickupModals(true)},
     { icon: FaPlane, label: "airport drop off", color: "bg-gray-100", onClick: () => setPickupModals(true) },
-    { icon: FaTruck, label: "pickup lorry", color: "bg-blue-100" },
-    { icon: FaBus, label: "bus travel", color: "bg-yellow-100" },
-    { icon: FaTruck, label: "pickup van", color: "bg-green-100" },
-    { icon: FaTrailer, label: "pickup trailer", color: "bg-pink-100" },
+    { icon: FaTruck, label: 'pickup lorry', color: 'bg-blue-100', onClick: () => setShowLorryModal(true) },
+    { icon: FaBus, label: "bus travel", color: "bg-yellow-100",  onClick: () => setShowLorryModal(true) },
+    { icon: FaTruck, label: "pickup van", color: "bg-green-100",  onClick: () => setShowLorryModal(true) },
+    { icon: FaTrailer, label: "pickup trailer", color: "bg-pink-100",  onClick: () => setShowLorryModal(true) },
   
   ];
 
@@ -752,6 +760,25 @@ const Dashboard = () => {
           <FaCar size={40} className="text-yellow-500 animate-bounce" />
         </div>
       ))}
+
+
+      {/* Modal for Pickup Lorry */}
+      {showLorryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold text-gray-800">Available Lorries</h2>
+              <button
+                onClick={() => setShowLorryModal(false)}
+                className="text-gray-600 hover:text-gray-800 text-2xl font-bold"
+              >
+                &times;
+              </button>
+            </div>
+            <AvailableVehicles onClose={() => setShowLorryModal(false)} filterType="lorry" />
+          </div>
+        </div>
+      )}
 
       <div
         className={`fixed top-4 right-0 z-50 w-64 p-4 bg-lime-900 text-white rounded-l-lg shadow-lg transform transition-transform duration-500 ease-in-out ${showNotification ? "translate-x-0" : "translate-x-full"
@@ -972,7 +999,7 @@ const Dashboard = () => {
 
             {activeTab === "city" && (
               <div className="">
-                  <RideTracking />
+                  {/* <RideTracking /> */}
               </div>
             )}
 
@@ -984,18 +1011,26 @@ const Dashboard = () => {
             )}
 
             {activeTab === "safety" && (
-              <div className="bg-white bg-opacity-90 p-6 rounded-lg shadow-lg max-w-lg mx-auto">
-                <h3 className="text-xl font-semibold mb-4">Your safety</h3>
-                <p className="text-gray-600">No history available yet.</p>
+              <div className="">
+                <PassengerRides />
               </div>
             )}
 
             {activeTab === "rides" && (
               <div className="">
-                <RideHistory />
+                <h2 className="text-white font-bold text-align-center">Do you own a vehicle to rent out?</h2>
+                <RegisterVehicle />
                 
               </div>
             )}
+
+{activeTab === "vehicle" && (
+              <div className="">
+              <OwnerDashboard />
+                
+              </div>
+            )}
+
 
             {activeTab === "suggestions" && (
               <div className="bg-opacity-90 p-6 rounded-lg shadow-lg">
@@ -1886,7 +1921,7 @@ const Dashboard = () => {
             )}
 
 
-{activeTab === "bookings" && (
+            {activeTab === "bookings" && (
               <div className="bg-white bg-opacity-95 p-6 rounded-xl shadow-xl max-w-2xl mx-auto transform transition-all duration-300 hover:shadow-2xl">
                 <h3 className="text-2xl font-bold text-gray-800 mb-6">Bookings</h3>
 
