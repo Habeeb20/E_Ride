@@ -154,7 +154,7 @@ router.get('/driver-offers/:driverId', verifyToken, async (req, res) => {
 // Update delivery status (Passenger side)
 router.put('/:id/status', verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { status, driverId } = req.body;
 
   try {
     const delivery = await Delivery.findById(id);
@@ -162,15 +162,21 @@ router.put('/:id/status', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Delivery not found' });
     }
 
-    // Only allow certain status updates from passenger
-    if (!['cancelled'].includes(status)) {
-      return res.status(403).json({ error: 'Passenger can only cancel delivery' });
+    // Allow passengers to cancel or accept a driver
+    if (!['cancelled', 'accepted'].includes(status)) {
+      return res.status(403).json({ error: 'Passenger can only cancel or accept delivery' });
     }
 
-    delivery.status = status;
+    if (status === 'accepted' && driverId) {
+      delivery.status = 'accepted';
+      delivery.driver = driverId;
+    } else if (status === 'cancelled') {
+      delivery.status = 'cancelled';
+    }
+
     await delivery.save();
 
-    if (delivery.driver) {
+    if (delivery.driver && status === 'cancelled') {
       global.io.to(delivery.driver.toString()).emit('rideCancelled', { deliveryId: id });
     }
 
@@ -187,18 +193,31 @@ router.put('/:id/driverstatus', verifyToken, async (req, res) => {
   const { status, driverId, negotiatedPrice } = req.body;
 
   try {
-    const delivery = await Delivery.findById(id);
-    if (!delivery) {
-      return res.status(404).json({ error: 'Delivery not found' });
+    const delivery = await Delivery.findById(id).populate('passengerAuth', 'firstName lastName phoneNumber');
+    const driver = await Profile.findById(driverId).select('firstName lastName phoneNumber carModel carColor');
+    if (!delivery || !driver) {
+      return res.status(404).json({ error: 'Delivery or driver not found' });
     }
 
     if (status === 'accepted' && !delivery.driver) {
       delivery.driver = driverId;
+      delivery.status = 'accepted';
       await Profile.updateOne({ _id: driverId }, { $set: { available: false } });
+      global.io.to(delivery.passenger.toString()).emit('driverResponse', {
+        deliveryId: id,
+        driverId,
+        response: 'accept',
+        driverDetails: driver,
+      });
     } else if (status === 'negotiating' && !delivery.driver) {
       delivery.driverNegotiatedPrice = negotiatedPrice;
       delivery.status = 'negotiating';
-      global.io.to(delivery.passenger.toString()).emit('driverNegotiation', { deliveryId: id, driverId, negotiatedPrice });
+      global.io.to(delivery.passenger.toString()).emit('driverNegotiation', {
+        deliveryId: id,
+        driverId,
+        negotiatedPrice,
+        driverDetails: driver,
+      });
     } else if (status === 'in_progress' && delivery.driver.toString() === driverId) {
       delivery.status = 'in_progress';
       global.io.to(delivery.passenger.toString()).emit('rideStarted', { deliveryId: id });
@@ -214,7 +233,6 @@ router.put('/:id/driverstatus', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Error updating delivery status' });
   }
 });
-
 // Add chat message
 router.post('/:id/chat', async (req, res) => {
   const { id } = req.params;

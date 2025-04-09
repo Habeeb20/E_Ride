@@ -83,35 +83,50 @@ io.on("connection", (socket) => {
 
 
 
-  
   socket.on('driverResponse', async ({ deliveryId, driverId, response, negotiatedPrice }) => {
     const delivery = await Delivery.findById(deliveryId);
+    const driver = await Profile.findById(driverId).select('firstName lastName phoneNumber carModel carColor');
+    if (!driver) return;
+  
     if (response === 'accept') {
       delivery.driver = driverId;
       delivery.status = 'accepted';
       await delivery.save();
-      io.to(delivery.passenger.toString()).emit('driverResponse', { deliveryId, driverId, status: 'accepted' });
+      io.to(delivery.passenger.toString()).emit('driverResponse', {
+        deliveryId,
+        driverId,
+        response,
+        driverDetails: driver,
+      });
     } else if (response === 'negotiate') {
       delivery.driverNegotiatedPrice = negotiatedPrice;
       delivery.status = 'negotiating';
       await delivery.save();
-      io.to(delivery.passenger.toString()).emit('driverNegotiation', { deliveryId, driverId, negotiatedPrice });
+      io.to(delivery.passenger.toString()).emit('driverNegotiation', {
+        deliveryId,
+        driverId,
+        negotiatedPrice,
+        driverDetails: driver,
+      });
     } else if (response === 'reject') {
-      io.to(delivery.passenger.toString()).emit('driverResponse', { deliveryId, driverId, status: 'rejected' });
+      io.to(delivery.passenger.toString()).emit('driverResponse', { deliveryId, driverId, response });
     }
   });
 
-  socket.on('passengerResponse', async ({ deliveryId, response }) => {
+  socket.on('passengerResponse', async ({ deliveryId, response, driverId }) => {
     const delivery = await Delivery.findById(deliveryId);
+    if (!delivery) return;
+  
     if (response === 'accept') {
-      delivery.status = 'in_progress';
+      delivery.status = 'accepted'; // Initially accepted, driver will move to in_progress
+      delivery.driver = driverId; // Ensure driver is set
       await delivery.save();
-      io.to(delivery.driver.toString()).emit('passengerAccepted', { deliveryId });
+      io.to(delivery.driver.toString()).emit('passengerResponse', { deliveryId, response: 'accept' });
     } else if (response === 'reject') {
       delivery.driver = null;
       delivery.status = 'pending';
       await delivery.save();
-      io.to(delivery.driver.toString()).emit('passengerRejected', { deliveryId });
+      io.to(delivery.driver.toString()).emit('passengerResponse', { deliveryId, response: 'reject' });
     }
   });
 

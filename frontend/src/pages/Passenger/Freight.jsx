@@ -72,34 +72,74 @@ function Freight() {
             setRideForm((prev) => ({ ...prev, pickupAddress: data.display_name || 'Current Location' }));
           } catch (error) {
             setRideForm((prev) => ({ ...prev, pickupAddress: 'Current Location' }));
+            console.error('Error fetching address from coordinates:', error);
           }
         },
         (error) => {
           setRideForm((prev) => ({ ...prev, pickupAddress: 'Unable to fetch location' }));
+          console.error('Geolocation error:', error.message);
         }
       );
     }
 
     if (token) {
       socket.connect();
-      socket.on('driverNegotiation', ({ deliveryId, driverId, negotiatedPrice }) => {
-        setInterestedDrivers((prev) => [...prev, { _id: driverId, negotiatedPrice }]);
-        toast.info(`Driver ${driverId} negotiated ₦${negotiatedPrice}`);
+      socket.on('connect', () => {
+        console.log('Socket connected with ID:', socket.id);
+        socket.emit('join', passengerId); // Join passenger's room
       });
-      socket.on('rideStarted', () => {
-        setRideStarted(true);
-        toast.success('Ride has started');
+      socket.on('driverNegotiation', ({ deliveryId: incomingDeliveryId, driverId, negotiatedPrice, driverDetails }) => {
+        console.log('Received driverNegotiation:', { incomingDeliveryId, driverId, negotiatedPrice, driverDetails });
+        if (incomingDeliveryId === deliveryId) {
+          setInterestedDrivers((prev) => {
+            const updatedDrivers = [
+              ...prev.filter((d) => d._id !== driverId),
+              { _id: driverId, negotiatedPrice, ...driverDetails, status: 'negotiated' }
+            ];
+            console.log('Updated interestedDrivers:', updatedDrivers);
+            return updatedDrivers;
+          });
+          toast.info(`Driver ${driverId} negotiated ₦${negotiatedPrice}`);
+        }
+      });
+      socket.on('driverResponse', ({ deliveryId: incomingDeliveryId, driverId, response, driverDetails }) => {
+        console.log('Received driverResponse:', { incomingDeliveryId, driverId, response, driverDetails });
+        if (incomingDeliveryId === deliveryId) {
+          if (response === 'accept' || response === 'negotiate') {
+            setInterestedDrivers((prev) => {
+              const updatedDrivers = [
+                ...prev.filter((d) => d._id !== driverId),
+                { _id: driverId, negotiatedPrice: response === 'negotiate' ? driverDetails.negotiatedPrice : null, ...driverDetails, status: response }
+              ];
+              console.log('Updated interestedDrivers:', updatedDrivers);
+              return updatedDrivers;
+            });
+            toast.info(`Driver ${driverId} ${response === 'accept' ? 'accepted' : 'negotiated'} your delivery`);
+          }
+        }
+      });
+      socket.on('rideStarted', ({ deliveryId: incomingDeliveryId }) => {
+        console.log('Received rideStarted:', { incomingDeliveryId });
+        if (incomingDeliveryId === deliveryId) {
+          setRideStarted(true);
+          toast.success('Ride has started');
+        }
       });
       socket.on('newMessage', ({ senderId, message }) => {
+        console.log('Received newMessage:', { senderId, message });
         setChatMessages((prev) => [...prev, { sender: senderId, text: message }]);
       });
       socket.on('driverLocationUpdate', ({ lat, lng }) => {
+        console.log('Received driverLocationUpdate:', { lat, lng });
         setDriverDetails((prev) => ({ ...prev, location: { lat, lng } }));
       });
     }
 
-    return () => socket.disconnect();
-  }, [token]);
+    return () => {
+      socket.disconnect();
+      console.log('Socket disconnected');
+    };
+  }, [token, deliveryId, passengerId]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -109,6 +149,7 @@ function Freight() {
         });
         setPassenger(response.data.data);
         setPassengerId(response.data.data?._id);
+        socket.emit('join', response.data.data?._id); // Ensure passenger joins their room after ID is set
       } catch (error) {
         toast.error('Please log in', { style: { background: '#F44336', color: 'white' } });
         navigate('/plogin');
@@ -178,12 +219,12 @@ function Freight() {
         destinationAddress: rideForm.destinationAddress,
       });
       const { distance, price } = response.data;
-      setRideForm((prev) => ({ ...prev, distance, price: price }));
-      console.log("your distance and fare!",distance, price)
+      setRideForm((prev) => ({ ...prev, distance, price }));
       setShowMap(true);
       toast.success(`Fare: ₦${price} (Distance: ${distance} km)`);
     } catch (error) {
       toast.error('Error calculating fare');
+      console.error('Fare calculation error:', error);
     }
   };
 
@@ -199,25 +240,56 @@ function Freight() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setDeliveryId(response.data._id);
-      socket.emit('join', response.data._id);
+      socket.emit('join', passengerId); // Ensure passenger is in their room
+      console.log('Delivery booked, joined room:', passengerId);
       toast.success('Delivery booked successfully');
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to book delivery');
+      console.error('Error booking delivery:', error.response?.data || error);
     } finally {
       setLoading(false);
       setIsCreatingRide(false);
     }
   };
 
-  const handleAcceptDriver = (driverId) => {
-    socket.emit('passengerResponse', { deliveryId, response: 'accept' });
-    setDriverDetails({ _id: driverId });
-    setInterestedDrivers([]);
+  const handleAcceptDriver = async (driverId) => {
+    if (driverDetails) {
+      toast.warn('You have already accepted a driver for this delivery.');
+      return;
+    }
+    try {
+      setLoading(true);
+      // Update status via API (passenger can only cancel, so this might need backend adjustment)
+      await axios.put(
+        `${import.meta.env.VITE_BACKEND_URL}/api/delivery/${deliveryId}/status`,
+        { status: 'accepted', driverId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      socket.emit('passengerResponse', { deliveryId, response: 'accept', driverId });
+      const acceptedDriver = interestedDrivers.find((d) => d._id === driverId);
+      setDriverDetails(acceptedDriver);
+      setInterestedDrivers([]);
+      toast.success(`Driver ${driverId} accepted`);
+    } catch (error) {
+      toast.error('Failed to accept driver');
+      console.error('Error accepting driver:', error.response?.data || error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRejectDriver = (driverId) => {
-    socket.emit('passengerResponse', { deliveryId, response: 'reject' });
-    setInterestedDrivers((prev) => prev.filter((d) => d._id !== driverId));
+  const handleRejectDriver = async (driverId) => {
+    try {
+      setLoading(true);
+      socket.emit('passengerResponse', { deliveryId, response: 'reject', driverId });
+      setInterestedDrivers((prev) => prev.filter((d) => d._id !== driverId));
+      toast.info(`Driver ${driverId} rejected`);
+    } catch (error) {
+      toast.error('Failed to reject driver');
+      console.error('Error rejecting driver:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancelRide = async () => {
@@ -227,17 +299,20 @@ function Freight() {
         { status: 'cancelled' },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      socket.emit('rideCancelled', { deliveryId });
       setRideStarted(false);
       setDriverDetails(null);
       setDeliveryId(null);
+      setInterestedDrivers([]);
       toast.success('Ride cancelled');
     } catch (error) {
       toast.error('Failed to cancel ride');
+      console.error('Error cancelling ride:', error);
     }
   };
 
   const sendChatMessage = async () => {
-    if (!newMessage.trim() || !deliveryId) return;
+    if (!newMessage.trim() || !deliveryId || !driverDetails) return;
     try {
       await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/${deliveryId}/chat`, {
         sender: passengerId,
@@ -252,16 +327,23 @@ function Freight() {
 
   const submitRatingAndReview = async () => {
     try {
+      await axios.put(
+        `${import.meta.env.VITE_BACKEND_URL}/api/delivery/${deliveryId}/status`,
+        { status: 'completed' },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/${deliveryId}/rate`, { rating, review });
+      setRideStatus('completed');
       toast.success('Rating submitted');
     } catch (error) {
+      toast.error('Error submitting rating');
       console.error('Error submitting rating:', error);
     }
   };
 
-  const mapUrl = showMap
+  const mapUrl = showMap && rideForm.pickupAddress && rideForm.destinationAddress
     ? `https://www.google.com/maps/embed/v1/directions?key=${embedApiKey}&origin=${encodeURIComponent(rideForm.pickupAddress)}&destination=${encodeURIComponent(rideForm.destinationAddress)}&mode=driving`
-    : `https://www.google.com/maps/embed/v1/view?key=${embedApiKey}&center=${currentLocation?.lat || 0},${currentLocation?.lng || 0}&zoom=15`;
+    : `https://www.google.com/maps/embed/v1/view?key=${embedApiKey}&center=${currentLocation?.lat || 6.5244},${currentLocation?.lng || 3.3792}&zoom=15`;
 
   const textColor = theme === 'light' ? 'text-black' : 'text-white';
 
@@ -309,9 +391,17 @@ function Freight() {
             </button>
             <h2 className={`text-xl font-bold mb-4 ${textColor}`}>Driver Proposal</h2>
             <p className={textColor}>Driver ID: {selectedDriver._id}</p>
+            <p className={textColor}>Name: {selectedDriver.firstName} {selectedDriver.lastName || ''}</p>
+            <p className={textColor}><FaPhone className="inline mr-1" /> {selectedDriver.phoneNumber || 'N/A'}</p>
+            <p className={textColor}><FaCar className="inline mr-1" /> {selectedDriver.carModel || 'N/A'} ({selectedDriver.carColor || 'N/A'})</p>
             <p className={textColor}>Proposed Price: ₦{selectedDriver.negotiatedPrice || rideForm.price}</p>
-            <button onClick={() => handleAcceptDriver(selectedDriver._id)} className="bg-green-600 text-white p-2 mr-2">Accept</button>
-            <button onClick={() => handleRejectDriver(selectedDriver._id)} className="bg-red-600 text-white p-2">Reject</button>
+            <p className={textColor}>Status: {selectedDriver.status === 'accept' ? 'Accepted' : 'Negotiated'}</p>
+            <button onClick={() => handleAcceptDriver(selectedDriver._id)} className="bg-green-600 text-white p-2 mr-2" disabled={!!driverDetails || loading}>
+              {loading ? 'Processing...' : 'Accept'}
+            </button>
+            <button onClick={() => handleRejectDriver(selectedDriver._id)} className="bg-red-600 text-white p-2" disabled={!!driverDetails || loading}>
+              {loading ? 'Processing...' : 'Reject'}
+            </button>
           </div>
         </div>
       )}
@@ -402,27 +492,54 @@ function Freight() {
             {deliveryId && !rideStarted && (
               <div className="mt-4">
                 <h4 className={`text-base font-semibold ${textColor}`}>Interested Drivers</h4>
-                {interestedDrivers.map((driver) => (
-                  <div key={driver._id} className="flex justify-between items-center p-2 border mb-2">
-                    <div>
-                      <p className={textColor}>Driver ID: {driver._id}</p>
-                      <p className={textColor}>Price: ₦{driver.negotiatedPrice || rideForm.price}</p>
+                {interestedDrivers.length > 0 ? (
+                  interestedDrivers.map((driver) => (
+                    <div key={driver._id} className="flex justify-between items-center p-2 border mb-2">
+                      <div>
+                        <p className={textColor}>Driver ID: {driver._id}</p>
+                        <p className={textColor}>Name: {driver.firstName} {driver.lastName || 'N/A'}</p>
+                        <p className={textColor}><FaPhone className="inline mr-1" /> {driver.phoneNumber || 'N/A'}</p>
+                        <p className={textColor}><FaCar className="inline mr-1" /> {driver.carModel || 'N/A'} ({driver.carColor || 'N/A'})</p>
+                        <p className={textColor}>Price: ₦{driver.negotiatedPrice || rideForm.price}</p>
+                        <p className={textColor}>Status: {driver.status === 'accept' ? 'Accepted' : 'Negotiated'}</p>
+                      </div>
+                      <div>
+                        <button
+                          onClick={() => handleAcceptDriver(driver._id)}
+                          className="bg-green-600 text-white p-1 mr-2"
+                          disabled={!!driverDetails || loading}
+                        >
+                          {loading ? 'Processing...' : 'Accept'}
+                        </button>
+                        <button
+                          onClick={() => handleRejectDriver(driver._id)}
+                          className="bg-red-600 text-white p-1"
+                          disabled={!!driverDetails || loading}
+                        >
+                          {loading ? 'Processing...' : 'Reject'}
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <button onClick={() => handleAcceptDriver(driver._id)} className="bg-green-600 text-white p-1 mr-2">Accept</button>
-                      <button onClick={() => handleRejectDriver(driver._id)} className="bg-red-600 text-white p-1">Reject</button>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className={textColor}>Waiting for drivers to respond...</p>
+                )}
               </div>
             )}
             {rideStarted && driverDetails && (
               <div className="mt-4">
                 <h4 className={`text-base font-semibold ${textColor}`}>Driver Assigned</h4>
                 <p className={textColor}>Driver ID: {driverDetails._id}</p>
+                <p className={textColor}>Name: {driverDetails.firstName} {driverDetails.lastName || 'N/A'}</p>
+                <p className={textColor}><FaPhone className="inline mr-1" /> {driverDetails.phoneNumber || 'N/A'}</p>
+                <p className={textColor}><FaCar className="inline mr-1" /> {driverDetails.carModel || 'N/A'} ({driverDetails.carColor || 'N/A'})</p>
+                <p className={textColor}>Price: ₦{driverDetails.negotiatedPrice || rideForm.price}</p>
+                {driverDetails.location && (
+                  <p className={textColor}>Driver Location: Lat {driverDetails.location.lat}, Lng {driverDetails.location.lng}</p>
+                )}
                 <button onClick={handleCancelRide} className="w-full py-2 bg-red-600 text-white rounded-lg mt-2">Cancel Ride</button>
                 <div className="mt-4">
-                  <h4 className={`text-base font-semibold ${textColor}`}>Chat</h4>
+                  <h4 className={`text-base font-semibold ${textColor}`}>Chat with Driver</h4>
                   <div className={`border p-2 rounded-lg h-24 overflow-y-auto ${theme === 'light' ? 'border-gray-200' : 'border-gray-600'}`}>
                     {chatMessages.map((msg, index) => (
                       <p key={index} className={msg.sender === passengerId ? 'text-right text-blue-600' : `text-left ${textColor}`}>
@@ -435,6 +552,7 @@ function Freight() {
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       className={`flex-1 p-2 border rounded-lg ${theme === 'light' ? 'border-gray-200 bg-white' : 'border-gray-600 bg-[#393737FF] text-white'}`}
+                      placeholder="Type a message..."
                     />
                     <button onClick={sendChatMessage} className="ml-2 px-4 py-2 bg-green-600 text-white rounded-lg">Send</button>
                   </div>
@@ -443,6 +561,7 @@ function Freight() {
             )}
             {rideStatus === 'completed' && (
               <div className="mt-4">
+                <h4 className={`text-base font-semibold ${textColor}`}>Rate Your Driver</h4>
                 <input
                   type="number"
                   min="1"
@@ -455,7 +574,7 @@ function Freight() {
                   value={review}
                   onChange={(e) => setReview(e.target.value)}
                   className={`w-full p-2 border rounded-lg mt-2 ${theme === 'light' ? 'border-gray-200 bg-white' : 'border-gray-600 bg-[#393737FF] text-white'}`}
-                  placeholder="Review"
+                  placeholder="Write a review..."
                 />
                 <button onClick={submitRatingAndReview} className="w-full py-2 bg-green-600 text-white rounded-lg mt-2">Submit Rating</button>
               </div>
@@ -463,14 +582,18 @@ function Freight() {
           </form>
         </div>
         <div className="lg:w-[55%] w-full h-96 lg:h-auto">
-          <iframe
-            width="100%"
-            height="100%"
-            style={{ border: 0, borderRadius: '8px' }}
-            loading="lazy"
-            allowFullScreen
-            src={mapUrl}
-          />
+          {mapUrl ? (
+            <iframe
+              width="100%"
+              height="100%"
+              style={{ border: 0, borderRadius: '8px' }}
+              loading="lazy"
+              allowFullScreen
+              src={mapUrl}
+            />
+          ) : (
+            <p className={textColor}>Map unavailable. Please check your location or addresses.</p>
+          )}
         </div>
       </div>
       <ToastContainer position="top-right" autoClose={3000} />

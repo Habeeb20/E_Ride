@@ -17,7 +17,7 @@ function FreightDriver() {
   const [negotiatedPrice, setNegotiatedPrice] = useState('');
   const [loading, setLoading] = useState(false);
   const [driverActions, setDriverActions] = useState({});
-  const [distances, setDistances] = useState({}); // Store distances for each delivery
+  const [distances, setDistances] = useState({});
 
   const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const embedApiKey = import.meta.env.VITE_EMBED_API_KEY;
@@ -40,6 +40,7 @@ function FreightDriver() {
         },
         (error) => {
           console.error("Location access denied:", error.message);
+          setCurrentLocation({ lat: 6.5244, lng: 3.3792 }); // Fallback to Lagos
         }
       );
     }
@@ -60,17 +61,22 @@ function FreightDriver() {
     if (token) {
       socket.connect();
       socket.on('newDelivery', (delivery) => {
-        setOffers((prev) => ({ ...prev, available: [...prev.available, delivery] }));
+        setOffers((prev) => {
+          // Avoid duplicates by checking if delivery already exists
+          if (prev.available.some((d) => d._id === delivery._id)) return prev;
+          return { ...prev, available: [...prev.available, delivery] };
+        });
         toast.info('New delivery available');
       });
       socket.on('passengerResponse', ({ deliveryId, response }) => {
+        console.log('Passenger Response:', { deliveryId, response });
         if (response === 'accept') {
           setOffers((prev) => ({
             available: prev.available.filter((d) => d._id !== deliveryId),
             assigned: prev.assigned.concat(prev.available.find((d) => d._id === deliveryId)),
           }));
           toast.success('Passenger accepted your offer');
-        } else {
+        } else if (response === 'reject') {
           setOffers((prev) => ({
             ...prev,
             assigned: prev.assigned.filter((d) => d._id !== deliveryId),
@@ -78,6 +84,7 @@ function FreightDriver() {
           toast.info('Passenger rejected your offer');
         }
       });
+      
       socket.on('newMessage', ({ senderId, message }) => {
         setChatMessages((prev) => [...prev, { sender: senderId, text: message }]);
       });
@@ -101,7 +108,14 @@ function FreightDriver() {
           const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/delivery/driver-offers/${driverId}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
-          setOffers(response.data);
+          // Ensure no duplicates in initial fetch
+          const uniqueAvailable = response.data.available.filter(
+            (d, index, self) => index === self.findIndex((t) => t._id === d._id)
+          );
+          const uniqueAssigned = response.data.assigned.filter(
+            (d, index, self) => index === self.findIndex((t) => t._id === d._id)
+          );
+          setOffers({ available: uniqueAvailable, assigned: uniqueAssigned });
         } catch (error) {
           console.error('Error fetching offers:', error);
         }
@@ -110,13 +124,11 @@ function FreightDriver() {
     }
   }, [driverId, token]);
 
-  // Calculate distance for each delivery when offers or currentLocation changes
   useEffect(() => {
     if (!currentLocation || (!offers.available.length && !offers.assigned.length)) return;
 
     const calculateDistances = async () => {
       const newDistances = {};
-
       const allDeliveries = [...offers.available, ...offers.assigned];
       for (const delivery of allDeliveries) {
         try {
@@ -125,8 +137,7 @@ function FreightDriver() {
           );
           const route = response.data.routes[0];
           if (route) {
-            const distance = route.legs[0].distance.text; // e.g., "5.2 km"
-            newDistances[delivery._id] = distance;
+            newDistances[delivery._id] = route.legs[0].distance.text;
           }
         } catch (error) {
           console.error(`Error calculating distance for delivery ${delivery._id}:`, error);
@@ -258,9 +269,10 @@ function FreightDriver() {
     }
   };
 
-  const mapUrl = selectedDelivery
-    ? `https://www.google.com/maps/embed/v1/directions?key=${embedApiKey}&origin=${currentLocation?.lat},${currentLocation?.lng}&destination=${encodeURIComponent(offers.assigned.find((d) => d._id === selectedDelivery)?.destinationAddress)}&mode=driving`
-    : `https://www.google.com/maps/embed/v1/view?key=${embedApiKey}¢er=${currentLocation?.lat || 0},${currentLocation?.lng || 0}&zoom=15`;
+  // Fixed mapUrl with proper encoding and fallback
+  const mapUrl = selectedDelivery && currentLocation
+    ? `https://www.google.com/maps/embed/v1/directions?key=${embedApiKey}&origin=${currentLocation.lat},${currentLocation.lng}&destination=${encodeURIComponent(offers.assigned.find((d) => d._id === selectedDelivery)?.destinationAddress || '')}&mode=driving`
+    : `https://www.google.com/maps/embed/v1/view?key=${embedApiKey}&center=${currentLocation?.lat || 6.5244},${currentLocation?.lng || 3.3792}&zoom=15`;
 
   const textColor = theme === 'light' ? 'text-gray-800' : 'text-white';
 
@@ -315,20 +327,20 @@ function FreightDriver() {
           {offers.assigned.map((delivery) => (
             <div key={delivery._id} className={`border p-2 mb-2 ${theme === 'light' ? 'border-gray-200' : 'border-gray-600'}`}>
               <p className={textColor}>Passenger: {delivery.passengerAuth?.firstName} {delivery.passengerAuth?.lastName || ''}</p>
-              <p className={textColor}><FaPhone className="inline mr-1" /> {delivery.passenger?.phoneNumber || 'N/A'}</p>
-                  <div className="flex items-center mt-2">
-                              <img
-                                src={delivery.passenger?.profilePicture || 'https://via.placeholder.com/50'}
-                                alt={`${delivery.passengerAuth?.firstName}'s profile`}
-                                className="w-12 h-12 rounded-full mr-2"
-                              />
-                              <button
-                                onClick={() => window.open(delivery.passenger.profilePicture || 'https://via.placeholder.com/50', '_blank')}
-                                className={`text-sm ${theme === 'light' ? 'text-blue-600' : 'text-blue-400'} hover:underline`}
-                              >
-                                <FaEye className="inline mr-1" /> View Picture
-                              </button>
-                            </div>
+              <p className={textColor}><FaPhone className="inline mr-1" /> {delivery.passengerAuth?.phoneNumber || 'N/A'}</p>
+              <div className="flex items-center mt-2">
+                <img
+                  src={delivery.passengerAuth?.profilePicture || 'https://via.placeholder.com/50'}
+                  alt={`${delivery.passengerAuth?.firstName}'s profile`}
+                  className="w-12 h-12 rounded-full mr-2"
+                />
+                <button
+                  onClick={() => window.open(delivery.passengerAuth?.profilePicture || 'https://via.placeholder.com/50', '_blank')}
+                  className={`text-sm ${theme === 'light' ? 'text-blue-600' : 'text-blue-400'} hover:underline`}
+                >
+                  <FaEye className="inline mr-1" /> View Picture
+                </button>
+              </div>
               <p className={textColor}>From: {delivery.pickupAddress}</p>
               <p className={textColor}>To: {delivery.destinationAddress}</p>
               <p className={textColor}>Distance: {distances[delivery._id] || 'Calculating...'}</p>
@@ -369,14 +381,18 @@ function FreightDriver() {
           )}
         </div>
         <div className="lg:w-[55%] w-full h-96 lg:h-auto">
-          <iframe
-            width="100%"
-            height="100%"
-            style={{ border: 0, borderRadius: '8px' }}
-            loading="lazy"
-            allowFullScreen
-            src={mapUrl}
-          />
+          {mapUrl ? (
+            <iframe
+              width="100%"
+              height="100%"
+              style={{ border: 0, borderRadius: '8px' }}
+              loading="lazy"
+              allowFullScreen
+              src={mapUrl}
+            />
+          ) : (
+            <p className={textColor}>Map unavailable. Please check your location or select a delivery.</p>
+          )}
         </div>
       </div>
       <ToastContainer position="top-right" autoClose={3000} />
