@@ -45,6 +45,7 @@ import AvailableVehicles from "../Vehicle/AvailableVehicle";
 import OwnerDashboard from "../Vehicle/OwnerDashboard";
 import BookSchedule from "./BookSchedule";
 import DriverSchedule from "../Driver/DriverSchedule";
+import Freight from "./Freight";
 
 
 // Inside your Dashboard component:
@@ -1013,9 +1014,8 @@ const Dashboard = () => {
 
 
             {activeTab === "freight" && (
-              <div className="bg-gray-200  bg-opacity-90 p-6 rounded-lg shadow-lg  mx-auto">
-                <h3 className="text-xl font-semibold mb-4">Want to transfer your goods ?</h3>
-                <p className="text-gray-600"><Fare /></p>
+              <div className="">
+               <Freight />
               </div>
             )}
 

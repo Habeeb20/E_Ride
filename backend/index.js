@@ -77,6 +77,73 @@ io.on("connection", (socket) => {
     console.log(`User ${socket.id} joined ride ${rideId}`);
   });
 
+  socket.on('join', (userId) => {
+    socket.join(userId);
+  });
+
+
+
+  
+  socket.on('driverResponse', async ({ deliveryId, driverId, response, negotiatedPrice }) => {
+    const delivery = await Delivery.findById(deliveryId);
+    if (response === 'accept') {
+      delivery.driver = driverId;
+      delivery.status = 'accepted';
+      await delivery.save();
+      io.to(delivery.passenger.toString()).emit('driverResponse', { deliveryId, driverId, status: 'accepted' });
+    } else if (response === 'negotiate') {
+      delivery.driverNegotiatedPrice = negotiatedPrice;
+      delivery.status = 'negotiating';
+      await delivery.save();
+      io.to(delivery.passenger.toString()).emit('driverNegotiation', { deliveryId, driverId, negotiatedPrice });
+    } else if (response === 'reject') {
+      io.to(delivery.passenger.toString()).emit('driverResponse', { deliveryId, driverId, status: 'rejected' });
+    }
+  });
+
+  socket.on('passengerResponse', async ({ deliveryId, response }) => {
+    const delivery = await Delivery.findById(deliveryId);
+    if (response === 'accept') {
+      delivery.status = 'in_progress';
+      await delivery.save();
+      io.to(delivery.driver.toString()).emit('passengerAccepted', { deliveryId });
+    } else if (response === 'reject') {
+      delivery.driver = null;
+      delivery.status = 'pending';
+      await delivery.save();
+      io.to(delivery.driver.toString()).emit('passengerRejected', { deliveryId });
+    }
+  });
+
+  socket.on('sendMessage', async ({ deliveryId, senderId, message }) => {
+    const delivery = await Delivery.findById(deliveryId);
+    delivery.chatMessages.push({ sender: senderId, text: message });
+    await delivery.save();
+    io.to(delivery.passenger.toString()).emit('newMessage', { senderId, message });
+    io.to(delivery.driver?.toString()).emit('newMessage', { senderId, message });
+  });
+
+  socket.on('updateDriverLocation', async ({ deliveryId, lat, lng }) => {
+    const delivery = await Delivery.findById(deliveryId);
+    delivery.driverLocation = { lat, lng };
+    await delivery.save();
+    io.to(delivery.passenger.toString()).emit('driverLocationUpdate', { lat, lng });
+  });
+
+  socket.on('startRide', async ({ deliveryId }) => {
+    const delivery = await Delivery.findById(deliveryId);
+    delivery.status = 'in_progress';
+    await delivery.save();
+    io.to(delivery.passenger.toString()).emit('rideStarted', { deliveryId });
+  });
+
+  socket.on('cancelRide', async ({ deliveryId }) => {
+    const delivery = await Delivery.findById(deliveryId);
+    delivery.status = 'cancelled';
+    await delivery.save();
+    io.to(delivery.driver?.toString()).emit('rideCancelled', { deliveryId });
+  });
+
 
 
 

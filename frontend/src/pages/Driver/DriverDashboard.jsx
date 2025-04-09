@@ -37,6 +37,7 @@ import ViewAvailableRides from "./viewAvailableRides";
 import AcceptedRide from "./AcceptedRide";
 import ActiveRide from "./ActiveRide";
 import DriverSchedule from "./DriverSchedule";
+import FreightDriver from "./FreightDriver";
 
 
 const DriverDashboard = () => {
@@ -1090,7 +1091,7 @@ const token = localStorage.getItem("token")
             )}
 
             {activeTab === "freight" && (
-            <></>
+            <FreightDriver/>
 
             )}
 
