@@ -20,8 +20,8 @@ const scheduleSchema = new mongoose.Schema({
     negotiatedPrice: { type: Number },
   },
   status: { type: String, enum: ['pending', 'confirmed', 'completed', 'cancelled'], default: 'pending' },
-  distance: { type: String }, // e.g., "5.2 km"
-  calculatedFare: { type: Number }, // e.g., 1500
+  distance: { type: String }, 
+  calculatedFare: { type: Number }, 
   chatId: { type: mongoose.Schema.Types.ObjectId, ref: 'Chat' },
   isDeleted: { type: Boolean, default: false },
 });
