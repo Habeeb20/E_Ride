@@ -88,15 +88,29 @@ ScheduleRoute.post("/respondtoschedule/:scheduleId", verifyToken, async (req, re
       return res.status(404).json({ status: false, message: "Schedule not available" });
     }
 
-    const driver = await User.findById(driverId);
-    if (!driver || driver.role !== "driver") {
-      return res.status(403).json({ status: false, message: "Unauthorized: Only drivers can respond" });
+    const user = await Profile.findOne({userId: driverId});
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: 'User not found',
+      });
+    }
+    
+const profileId = user._id
+
+    const isDriver = user.role === 'driver';
+    let hasCar = false;
+    if (!isDriver) {
+      hasCar = await OwnAcar.findOne({ profileId });
     }
 
-    const driverProfile = await Profile.findOne({ userId: driver._id });
-    if (!driverProfile) {
-      return res.status(404).json({ status: false, message: "Driver profile not found" });
+    if (!isDriver && !hasCar) {
+      return res.status(403).json({
+        status: false,
+        message: 'Unauthorized: Only drivers or passengers with a registered car can view available schedules',
+      });
     }
+
 
     if (!["accepted", "rejected", "negotiating"].includes(status)) {
       return res.status(400).json({ status: false, message: "Invalid status. Use 'accepted', 'rejected', or 'negotiating'" });
@@ -106,8 +120,8 @@ ScheduleRoute.post("/respondtoschedule/:scheduleId", verifyToken, async (req, re
       return res.status(400).json({ status: false, message: "Negotiated price must be provided and positive" });
     }
 
-    schedule.driverId = driver._id;
-    schedule.driverProfileId = driverProfile._id;
+    schedule.driverId = isDriver._id;
+    schedule.driverProfileId = user._id;
     schedule.driverResponse = {
       status,
       negotiatedPrice: status === "negotiating" ? negotiatedPrice : null,
@@ -115,7 +129,7 @@ ScheduleRoute.post("/respondtoschedule/:scheduleId", verifyToken, async (req, re
 
     if (status === "accepted") {
       schedule.status = "confirmed";
-      const chat = new Chat({ scheduleId, participants: [schedule.customerId, driver._id] });
+      const chat = new Chat({ scheduleId, participants: [schedule.customerId, isDriver._id] });
       await chat.save();
       schedule.chatId = chat._id;
 
@@ -176,7 +190,7 @@ ScheduleRoute.get('/allschedules', verifyToken, async (req, res) => {
         message: 'User not found',
       });
     }
-    
+
 const profileId = user._id
 
     const isDriver = user.role === 'driver';
@@ -284,12 +298,10 @@ ScheduleRoute.get("/myAcceptedSchedule", verifyToken, async (req, res) => {
       "driverResponse.status": { $in: ["accepted", "negotiating"] },
     })
       .populate("customerId", "firstName lastName email")
-      .populate("profileId", "phoneNumber profilePicture");
+      .populate("customerProfileId", "phoneNumber profilePicture");
 
-    if (!schedules.length) {
-      return res.status(404).json({ status: false, message: "No accepted or negotiated schedules found" });
-    }
-
+ 
+    console.log(schedules)
     return res.status(200).json({
       status: true,
       message: "Accepted and negotiated schedules",

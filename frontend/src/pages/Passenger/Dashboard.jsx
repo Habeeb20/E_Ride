@@ -715,7 +715,7 @@ const Dashboard = () => {
   const sidebarItems = [
     { id: "bookRide", label: "Book a Ride", icon: FaCar },
     { id: "suggestions", label: "Suggestions", icon: FaCar },
-    { id: "city", label: "Track ride", icon: FaRoute },
+  
     { id: "freight", label: "Freight", icon: FaTruck },
     { id: "safety", label: "My-Rides", icon: FaShieldAlt },
     { id: "ownACar", label: "own a car?", icon: FaCar },

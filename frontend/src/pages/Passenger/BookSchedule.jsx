@@ -24,10 +24,14 @@ const BookSchedule = () => {
   const [theme, setTheme] = useState('dark');
   const [currentLocation, setCurrentLocation] = useState(null);
   const [showMap, setShowMap] = useState(false);
+  const [acceptedDriver, setAcceptedDriver] = useState(null); // State for driver who accepted
+  const [messages, setMessages] = useState([]); // Chat messages
+  const [chatMessage, setChatMessage] = useState(''); // Input for sending messages
 
   const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const embedApiKey = import.meta.env.VITE_EMBED_API_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY; // Fallback to same key
   const token = localStorage.getItem('token');
+  const userId = localStorage.getItem('token'); 
   const navigate = useNavigate();
 
   const socket = io(import.meta.env.VITE_BACKEND_URL, {
@@ -64,7 +68,41 @@ const BookSchedule = () => {
     } else {
       console.error('Geolocation not supported by browser');
     }
-  }, []);
+  
+
+
+
+  socket.on('connect', () => {
+    console.log('Connected to Socket.IO server');
+    socket.emit('join', userId); 
+  });
+
+  socket.on('driverResponse', (data) => {
+    console.log('Driver response received:', data);
+    if (data.driverResponse === 'accepted') {
+      setAcceptedDriver({ scheduleId: data.scheduleId, driverId: data.driverId });
+      toast.success(`Driver accepted your schedule (ID: ${data.scheduleId})`);
+      socket.emit('join', data.scheduleId); 
+    }
+  });
+
+  socket.on('chatInitiated', (data) => {
+    console.log('Chat initiated for schedule:', data.scheduleId);
+    toast.info('Chat started with driver');
+  });
+
+  socket.on('newMessage', (data) => {
+    setMessages((prev) => [...prev, { senderId: data.senderId, message: data.message }]);
+  });
+
+  return () => {
+    socket.off('connect');
+    socket.off('driverResponse');
+    socket.off('chatInitiated');
+    socket.off('newMessage');
+  };
+}, [socket, token, userId, navigate]);
+
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -328,6 +366,46 @@ const BookSchedule = () => {
               )}
             </button>
           </form>
+                {/* Display Accepted Driver */}
+                {acceptedDriver && (
+            <div className="mt-4">
+              <h4 className={`text-md font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
+                Schedule Accepted by Driver
+              </h4>
+              <p className={theme === 'light' ? 'text-gray-600' : 'text-gray-300'}>
+                Driver ID: {acceptedDriver.driverId} | Schedule ID: {acceptedDriver.scheduleId}
+              </p>
+            </div>
+          )}
+
+          {/* Chat Section */}
+          {acceptedDriver && (
+            <div className="mt-4">
+              <h4 className={`text-md font-semibold ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>Chat with Driver</h4>
+              <div className={`h-40 overflow-y-auto p-2 border rounded-lg ${theme === 'light' ? 'border-gray-200 bg-white' : 'border-gray-600 bg-[#393737FF]'}`}>
+                {messages.map((msg, index) => (
+                  <p key={index} className={theme === 'light' ? 'text-gray-800' : 'text-white'}>
+                    {msg.senderId === userId ? 'You' : 'Driver'}: {msg.message}
+                  </p>
+                ))}
+              </div>
+              <div className="mt-2 flex">
+                <input
+                  type="text"
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  className={`flex-1 p-2 border rounded-l-lg ${theme === 'light' ? 'border-gray-200 bg-white text-gray-800' : 'border-gray-600 bg-[#393737FF] text-white'}`}
+                  placeholder="Type a message"
+                />
+                <button
+                  onClick={sendMessage}
+                  className="p-2 bg-green-700 text-white rounded-r-lg hover:bg-green-900"
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="lg:w-[55%] w-full h-96 lg:h-auto">
@@ -361,3 +439,49 @@ const BookSchedule = () => {
 };
 
 export default BookSchedule;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

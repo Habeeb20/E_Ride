@@ -41,6 +41,7 @@ const DriverSchedule = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
         setAcceptedSchedules(response.data.schedules);
+        console.log(response.data.schedules, "your accepted schedules")
         response.data.schedules.forEach(async (schedule) => {
           if (schedule.chatId) {
             const chatResponse = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/schedule/chat/${schedule._id}`, {
