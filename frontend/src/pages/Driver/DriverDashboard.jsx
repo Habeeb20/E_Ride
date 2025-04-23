@@ -498,7 +498,7 @@ const token = localStorage.getItem("token")
     { id: "city", label: "Ride Notifications", icon: FaRoute },
     { id: "freight", label: "Freight Deliveries", icon: FaTruck },
     { id: "bookings", label: "bookings", icon: FaCalendar },
-    { id: "rides", label: "Rides", icon: FaRoute },
+    // { id: "rides", label: "Rides", icon: FaRoute },
     { id: "profile", label: "Profile", icon: FaUser },
     { id: "settings", label: "Settings", icon: FaCog },
     { id: "schedules", label: "All Schedules", icon: FaCalendar },

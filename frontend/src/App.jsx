@@ -13,6 +13,7 @@ import ProfileForm from "./pages/Auth/ProfileForm";
 import FaceAuth from "./pages/Auth/FaceAuth";
 import DriverDashboard from "./pages/Driver/DriverDashboard";
 import Fare from "./pages/Fare";
+import CarTracker from "./pages/CarTracker";
 
 // Custom PrivateRoute to check token in localStorage
 const PrivateRoute = ({ children }) => {
@@ -58,6 +59,7 @@ const App = () => {
         <Route path="/verifyemail" element={<EmailVerifyRoute />} />
         <Route path="/profileform" element={<ProfileForm  />} /> 
         <Route path="/fare" element={<Fare />} />
+        <Route path="/cartracker" element={<CarTracker />} />
 
     
         <Route

@@ -46,6 +46,7 @@ import OwnerDashboard from "../Vehicle/OwnerDashboard";
 import BookSchedule from "./BookSchedule";
 import DriverSchedule from "../Driver/DriverSchedule";
 import Freight from "./Freight";
+import PassengerRideTracker from "./PassengerTracker";
 
 
 // Inside your Dashboard component:
@@ -715,13 +716,13 @@ const Dashboard = () => {
 
   const sidebarItems = [
     { id: "bookRide", label: "Book a Ride", icon: FaCar },
+    { id: "appointment", label: "appointment", icon: FaTruck },
     { id: "suggestions", label: "Suggestions", icon: FaCar },
-  
     { id: "freight", label: "Freight", icon: FaTruck },
     { id: "safety", label: "My-Rides", icon: FaShieldAlt },
     { id: "ownACar", label: "own a car?", icon: FaCar },
     { id: "profile", label: "Profile", icon: FaUser },
-    { id: "settings", label: "Settings", icon: FaCog },
+    // { id: "settings", label: "Settings", icon: FaCog },
     { id: "rideAlong", label: "ride along?", icon: FaCar },
     { id: "schedule", label: "have a schedule?", icon: FaCalendar },
     { id: "bookings", label: "Your Bookings", icon: FaCalendarCheck },
@@ -999,6 +1000,16 @@ const Dashboard = () => {
              
               </div>
             )}
+
+            
+{activeTab === "appointment" && (
+              <div className="">
+             
+                  <PassengerRideTracker />
+             
+              </div>
+            )}
+
 
             {activeTab === "city" && (
               <div className="">

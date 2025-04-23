@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import Autocomplete from 'react-google-autocomplete';
 import { FaArrowLeft, FaInfoCircle, FaSun, FaMoon, FaCar, FaEye, FaTimes, FaRoute, FaPhone } from 'react-icons/fa';
@@ -6,6 +6,21 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
+
+// Load Google Maps script dynamically
+const loadGoogleMapsScript = () => {
+  return new Promise((resolve) => {
+    if (window.google && window.google.maps) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.async = true;
+    script.onload = resolve;
+    document.head.appendChild(script);
+  });
+};
 
 function Freight() {
   const [rideForm, setRideForm] = useState({
@@ -43,8 +58,13 @@ function Freight() {
   const [showDriverModal, setShowDriverModal] = useState(false);
   const [packageImageFile, setPackageImageFile] = useState(null);
 
+  const mapRef = useRef(null); // Reference to the map DOM element
+  const googleMapRef = useRef(null); // Reference to the Google Map instance
+  const driverMarkerRef = useRef(null); // Reference to the driver's marker
+  const directionsServiceRef = useRef(null); // Google Directions Service
+  const directionsRendererRef = useRef(null); // Google Directions Renderer
+
   const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-  const embedApiKey = import.meta.env.VITE_EMBED_API_KEY;
   const cloudinaryUploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
   const cloudinaryCloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
   const token = localStorage.getItem("token");
@@ -57,6 +77,25 @@ function Freight() {
 
   const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
 
+  // Initialize Google Map
+  useEffect(() => {
+    loadGoogleMapsScript().then(() => {
+      if (mapRef.current && !googleMapRef.current) {
+        googleMapRef.current = new window.google.maps.Map(mapRef.current, {
+          center: currentLocation || { lat: 6.5244, lng: 3.3792 }, // Default to Lagos if no current location
+          zoom: 15,
+          mapTypeId: 'roadmap',
+        });
+        directionsServiceRef.current = new window.google.maps.DirectionsService();
+        directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
+          map: googleMapRef.current,
+          suppressMarkers: true, // Hide default A/B markers
+        });
+      }
+    });
+  }, [currentLocation]);
+
+  // Socket setup and real-time updates
   useEffect(() => {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -86,61 +125,50 @@ function Freight() {
       socket.connect();
       socket.on('connect', () => {
         console.log('Socket connected with ID:', socket.id);
-        socket.emit('join', passengerId); // Join passenger's room
+        socket.emit('join', passengerId);
       });
       socket.on('driverNegotiation', ({ deliveryId: incomingDeliveryId, driverId, negotiatedPrice, driverDetails }) => {
-        console.log('Received driverNegotiation:', { incomingDeliveryId, driverId, negotiatedPrice, driverDetails });
         if (incomingDeliveryId === deliveryId) {
-          setInterestedDrivers((prev) => {
-            const updatedDrivers = [
-              ...prev.filter((d) => d._id !== driverId),
-              { _id: driverId, negotiatedPrice, ...driverDetails, status: 'negotiated' }
-            ];
-            console.log('Updated interestedDrivers:', updatedDrivers);
-            return updatedDrivers;
-          });
+          console.log('Driver Negotiation:', { driverId, negotiatedPrice, driverDetails });
+          setInterestedDrivers((prev) => [
+            ...prev.filter((d) => d._id !== driverId),
+            { _id: driverId, negotiatedPrice, ...driverDetails, status: 'negotiated' }
+          ]);
           toast.info(`Driver ${driverId} negotiated ₦${negotiatedPrice}`);
         }
       });
       socket.on('driverResponse', ({ deliveryId: incomingDeliveryId, driverId, response, driverDetails }) => {
-        console.log('Received driverResponse:', { incomingDeliveryId, driverId, response, driverDetails });
         if (incomingDeliveryId === deliveryId) {
+          console.log('Driver Response:', { driverId, response, driverDetails });
           if (response === 'accept' || response === 'negotiate') {
-            setInterestedDrivers((prev) => {
-              const updatedDrivers = [
-                ...prev.filter((d) => d._id !== driverId),
-                { _id: driverId, negotiatedPrice: response === 'negotiate' ? driverDetails.negotiatedPrice : null, ...driverDetails, status: response }
-              ];
-              console.log('Updated interestedDrivers:', updatedDrivers);
-              return updatedDrivers;
-            });
+            setInterestedDrivers((prev) => [
+              ...prev.filter((d) => d._id !== driverId),
+              { _id: driverId, negotiatedPrice: response === 'negotiate' ? driverDetails.negotiatedPrice : null, ...driverDetails, status: response }
+            ]);
             toast.info(`Driver ${driverId} ${response === 'accept' ? 'accepted' : 'negotiated'} your delivery`);
           }
         }
       });
       socket.on('rideStarted', ({ deliveryId: incomingDeliveryId }) => {
-        console.log('Received rideStarted:', { incomingDeliveryId });
         if (incomingDeliveryId === deliveryId) {
           setRideStarted(true);
           toast.success('Ride has started');
         }
       });
       socket.on('newMessage', ({ senderId, message }) => {
-        console.log('Received newMessage:', { senderId, message });
         setChatMessages((prev) => [...prev, { sender: senderId, text: message }]);
       });
       socket.on('driverLocationUpdate', ({ lat, lng }) => {
-        console.log('Received driverLocationUpdate:', { lat, lng });
+        console.log('Driver Location Update:', { lat, lng });
         setDriverDetails((prev) => ({ ...prev, location: { lat, lng } }));
+        updateDriverMarker({ lat, lng });
       });
     }
 
-    return () => {
-      socket.disconnect();
-      console.log('Socket disconnected');
-    };
+    return () => socket.disconnect();
   }, [token, deliveryId, passengerId]);
 
+  // Fetch profile and nearby drivers
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -149,7 +177,7 @@ function Freight() {
         });
         setPassenger(response.data.data);
         setPassengerId(response.data.data?._id);
-        socket.emit('join', response.data.data?._id); // Ensure passenger joins their room after ID is set
+        socket.emit('join', response.data.data?._id);
       } catch (error) {
         toast.error('Please log in', { style: { background: '#F44336', color: 'white' } });
         navigate('/plogin');
@@ -181,6 +209,62 @@ function Freight() {
       fetchRideHistory();
     }
   }, [passengerId]);
+
+  // Update map with route and driver marker
+  useEffect(() => {
+    if (googleMapRef.current && showMap && rideForm.pickupAddress && rideForm.destinationAddress) {
+      const directionsService = directionsServiceRef.current;
+      const directionsRenderer = directionsRendererRef.current;
+
+      directionsService.route(
+        {
+          origin: rideForm.pickupAddress,
+          destination: rideForm.destinationAddress,
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (result, status) => {
+          if (status === window.google.maps.DirectionsStatus.OK) {
+            directionsRenderer.setDirections(result);
+            // Add markers for pickup and destination
+            new window.google.maps.Marker({
+              position: result.routes[0].legs[0].start_location,
+              map: googleMapRef.current,
+              label: 'P', // Pickup
+              icon: { url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png' },
+            });
+            new window.google.maps.Marker({
+              position: result.routes[0].legs[0].end_location,
+              map: googleMapRef.current,
+              label: 'D', // Destination
+              icon: { url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png' },
+            });
+          } else {
+            console.error('Directions request failed:', status);
+          }
+        }
+      );
+    }
+  }, [showMap, rideForm.pickupAddress, rideForm.destinationAddress]);
+
+  // Function to update driver marker position
+  const updateDriverMarker = (location) => {
+    if (googleMapRef.current && location) {
+      if (!driverMarkerRef.current) {
+        driverMarkerRef.current = new window.google.maps.Marker({
+          position: location,
+          map: googleMapRef.current,
+          icon: {
+            url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png', // Car icon
+            scaledSize: new window.google.maps.Size(32, 32),
+          },
+          title: 'Driver',
+        });
+      } else {
+        driverMarkerRef.current.setPosition(location);
+      }
+      googleMapRef.current.panTo(location); // Center map on driver
+    }
+  };
 
   const uploadImageToCloudinary = async (file) => {
     const formData = new FormData();
@@ -240,12 +324,10 @@ function Freight() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setDeliveryId(response.data._id);
-      socket.emit('join', passengerId); // Ensure passenger is in their room
-      console.log('Delivery booked, joined room:', passengerId);
+      socket.emit('join', passengerId);
       toast.success('Delivery booked successfully');
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to book delivery');
-      console.error('Error booking delivery:', error.response?.data || error);
     } finally {
       setLoading(false);
       setIsCreatingRide(false);
@@ -259,7 +341,6 @@ function Freight() {
     }
     try {
       setLoading(true);
-      // Update status via API (passenger can only cancel, so this might need backend adjustment)
       await axios.put(
         `${import.meta.env.VITE_BACKEND_URL}/api/delivery/${deliveryId}/status`,
         { status: 'accepted', driverId },
@@ -272,7 +353,7 @@ function Freight() {
       toast.success(`Driver ${driverId} accepted`);
     } catch (error) {
       toast.error('Failed to accept driver');
-      console.error('Error accepting driver:', error.response?.data || error);
+      console.error('Error accepting driver:', error);
     } finally {
       setLoading(false);
     }
@@ -307,7 +388,6 @@ function Freight() {
       toast.success('Ride cancelled');
     } catch (error) {
       toast.error('Failed to cancel ride');
-      console.error('Error cancelling ride:', error);
     }
   };
 
@@ -340,10 +420,6 @@ function Freight() {
       console.error('Error submitting rating:', error);
     }
   };
-
-  const mapUrl = showMap && rideForm.pickupAddress && rideForm.destinationAddress
-    ? `https://www.google.com/maps/embed/v1/directions?key=${embedApiKey}&origin=${encodeURIComponent(rideForm.pickupAddress)}&destination=${encodeURIComponent(rideForm.destinationAddress)}&mode=driving`
-    : `https://www.google.com/maps/embed/v1/view?key=${embedApiKey}&center=${currentLocation?.lat || 6.5244},${currentLocation?.lng || 3.3792}&zoom=15`;
 
   const textColor = theme === 'light' ? 'text-black' : 'text-white';
 
@@ -582,18 +658,7 @@ function Freight() {
           </form>
         </div>
         <div className="lg:w-[55%] w-full h-96 lg:h-auto">
-          {mapUrl ? (
-            <iframe
-              width="100%"
-              height="100%"
-              style={{ border: 0, borderRadius: '8px' }}
-              loading="lazy"
-              allowFullScreen
-              src={mapUrl}
-            />
-          ) : (
-            <p className={textColor}>Map unavailable. Please check your location or addresses.</p>
-          )}
+          <div ref={mapRef} className="w-full h-full rounded-lg" />
         </div>
       </div>
       <ToastContainer position="top-right" autoClose={3000} />

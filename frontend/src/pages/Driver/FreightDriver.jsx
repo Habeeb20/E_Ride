@@ -269,6 +269,22 @@ function FreightDriver() {
     }
   };
 
+
+  useEffect((deliveryId) => {
+    if (deliveryId) {
+      const interval = setInterval(() => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            socket.emit('updateDriverLocation', { deliveryId, lat: latitude, lng: longitude });
+          },
+          (error) => console.error('Geolocation error:', error)
+        );
+      }, 5000); // Every 5 seconds
+      return () => clearInterval(interval);
+    }
+  }, []);
+
   // Fixed mapUrl with proper encoding and fallback
   const mapUrl = selectedDelivery && currentLocation
     ? `https://www.google.com/maps/embed/v1/directions?key=${embedApiKey}&origin=${currentLocation.lat},${currentLocation.lng}&destination=${encodeURIComponent(offers.assigned.find((d) => d._id === selectedDelivery)?.destinationAddress || '')}&mode=driving`
